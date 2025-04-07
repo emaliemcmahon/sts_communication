@@ -15,6 +15,8 @@ python code/rm_aborted_runs.py \
   -d /orcd/data/ngk/001/users/emaliem/sts_communication/sub-${par}/ses-${ses}/func
 
 # Plot the anatomical image
+conda deactivate
+conda activate nilearn
 python code/visualize_anatomy.py \
   -f sub-${par}/ses-${ses}/anat/sub-${par}_ses-${ses}_T1w.nii.gz \
   -i orig_anat.jpg
@@ -38,6 +40,3 @@ rm sub-${par}/ses-${ses}/anat/sub-${par}_ses-${ses}_T1w.nii.gz
 mv sub-${par}/ses-${ses}/anat/sub-${par}_ses-${ses}_T1w-defaced.nii.gz \
   sub-${par}/ses-${ses}/anat/sub-${par}_ses-${ses}_T1w.nii.gz
 rm *jpg
-
-# Remove aborted runs 
-python code/rm_aborted_runs.py -d sub-${par}/ses-${ses}/func
