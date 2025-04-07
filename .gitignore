@@ -1,0 +1,11 @@
+derivatives/
+sourcedata/
+tmp_dcm2bids/
+sub*/
+*out
+*/*out
+stimuli/
+*/*.mp4
+.vscode/
+participants.tsv
+participants.json
