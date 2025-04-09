@@ -24,7 +24,5 @@ $bids_dir $output_dir participant \
 --participant-label $sid \
 --n_cpus 24 --omp-nthreads 6 \
 --output-space T1w MNI152NLin2009cAsym \
---bold2anat-dof 6 #\
-# --fs-license-file $fs_license_file 
-
-
+--bold2anat-dof 6 \
+--fs-license-file $fs_license_file 

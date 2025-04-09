@@ -65,7 +65,7 @@ class GroupRandomEffects:
                              axes=axes[int(midx / ncols), int(midx % ncols)],
                              display_mode="x",
                              cmap="bwr")
-        fig.suptitle(f"{self.condition_one} vs {self.condition_one} (unc p<.001)")
+        fig.suptitle(f"{self.condition_one} vs {self.condition_two} (unc p<.001)")
         plt.savefig(f'{self.out_path}/{self.contrast}_individuals.png')
 
         second_level_model = SecondLevelModel(smoothing_fwhm=8.0, n_jobs=2)
@@ -76,7 +76,7 @@ class GroupRandomEffects:
         plot_design_matrix(second_level_model.design_matrix_,
                            output_file=f'{self.out_path}/{self.contrast}_design.png')
         
-        title = f"{self.condition_one} vs {self.condition_one} (unc p<0.001)"
+        title = f"{self.condition_one} vs {self.condition_two} (unc p<0.001)"
         plot_glass_brain(z_score,
                          threshold=self.threshold,
                          plot_abs=False,

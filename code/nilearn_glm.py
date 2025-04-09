@@ -11,11 +11,10 @@ from nilearn.glm import threshold_stats_img
 
 contrast_names = {
                     'communicate': ['com_phy-phy', 'com_ind-ind',
-                                    'com_phy', 'phy', 'com_ind', 'ind',
                                     'face_first-face_third',
-                                    'face_first', 'face_third',
-                                    '0.5*face_third+0.5*face_first-face_noncom',
-                                    '0.5*face_third+0.5*face_first', 'face_noncom'],
+                                    'face_third-face_noncom',
+                                    'face_first-face_noncom',
+                                    '0.5*face_third+0.5*face_first-face_noncom'],
                     'pointlight': ['interact-noninteract'],
                     'eploc': ['emotional-physical'],
                     'tom': ['belief-photo']

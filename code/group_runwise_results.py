@@ -10,10 +10,15 @@ from itertools import permutations
 from scipy.stats import ttest_1samp
 import numpy as np
 
-contrasts = [('face_first', 'face_noncom'),
-             ('face_third', 'face_noncom'),
-             ('com_ind', 'ind'),
-             ('com_phy', 'phy')]
+contrasts = [('face-first', 'face-noncom'),
+             ('face-third', 'face-noncom'),
+             ('com-ind', 'ind'),
+             ('com-joint', 'joint')]
+
+condition_rename = {'com_phy': 'com-joint', 'phy': 'joint',
+                    'com_ind': 'com-ind',
+                    'face_first': 'face-first', 'face_third': 'face-third',
+                    'face_noncom': 'face-noncom'}
 
 
 class GroupRunwiseResults:
@@ -46,9 +51,8 @@ class GroupRunwiseResults:
                            'face_first', 'face_third', 'face_noncom',
                            'com_phy', 'phy', 'com_ind', 'ind']
         self.plotting_conditions = ['object',
-                                    'face_first', 'face_third', 'face_noncom',
-                                    'com_phy', 'phy', 'com_ind', 'ind']
-        self.dyad_com_conditions = ['com_phy', 'com_ind']
+                                    'face-first', 'face-third', 'face-noncom',
+                                    'com-joint', 'joint', 'com-ind', 'ind']
         self.hemis = ['l', 'r']
         self.rois = ['EVC', 'MT', 'FFA', 'EBA', 'fSTS',
                      'SI-STS', 'face-comSTS', 
@@ -83,6 +87,30 @@ class GroupRunwiseResults:
         fig.tight_layout()
         fig.savefig(f'{self.out_path}/summary.pdf')
 
+    def plot_individual_roi(self, df, hemi='r', rois=['EBA', 'SI-STS']):
+        df = df.loc[df.roi.isin(rois) & (df.hemi == hemi)]
+        df.set_index('roi', inplace=True)
+        sns.set_context('paper')
+        fig, axes = plt.subplots(1,len(rois),
+                                 sharex=True, sharey='row',
+                                 figsize=(4, 2))
+        axes = axes.flatten()
+        for ax, roi in zip(axes, rois):
+            sns.barplot(x='trial_type', y='response',
+                        hue='trial_type', legend=False,
+                        ax=ax, data=df.loc[roi], 
+                        palette=self.palette)
+
+            ax.set_xticks(range(len(self.plotting_conditions)))
+            ax.set_xticklabels(self.plotting_conditions, rotation=45, ha='right')
+            ax.spines['right'].set_visible(False)
+            ax.spines['top'].set_visible(False)
+            ax.set_xlabel('')
+            ax.set_ylabel(r'$\beta$')
+            ax.set_title(f'{roi}')
+        fig.tight_layout()
+        fig.savefig(f'{self.out_path}/small_summary.pdf')
+
     def load_data(self):
         df = []
         for sub in tqdm(self.subjs, desc='Loading subject data'):
@@ -116,6 +144,7 @@ class GroupRunwiseResults:
             df = pd.read_csv(self.out_file)
         mean_df = df.groupby(['roi', 'hemi',
                              'trial_type', 'subject_label']).mean(numeric_only=True).reset_index()
+        mean_df['trial_type'] = mean_df['trial_type'].replace(condition_rename)
         mean_df = mean_df.loc[mean_df['trial_type'].isin(self.plotting_conditions)].reset_index(drop=True)
         mean_df.drop(columns='run', inplace=True)
         summary = self.statistical_analysis(mean_df)
@@ -133,6 +162,7 @@ class GroupRunwiseResults:
                                             ordered=True,
                                             categories=self.subjs)
         self.plot_rois(mean_df)
+        self.plot_individual_roi(mean_df)
         
         
 
@@ -140,7 +170,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--dataset_path', '-d', type=str,
                         default='/mindhive/nklab3/users/emaliem/sts_communication')
-    parser.add_argument('--n_subjs', '-n', type=int, default=3,
+    parser.add_argument('--n_subjs', '-n', type=int, default=4,
                         help='the number of subjects to include')
     parser.add_argument('--overwrite', action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument('--plot_indiv', action=argparse.BooleanOptionalAction, default=True)
