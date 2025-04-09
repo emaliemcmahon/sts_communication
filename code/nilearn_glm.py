@@ -10,27 +10,16 @@ from nilearn.glm import threshold_stats_img
 
 
 contrast_names = {
-    'communicate': ['0.111*body+0.111*object+0.111*face_first+0.111*face_third+0.111*face_noncom+0.111*com_phy+0.111*com_ind+0.111*phy+0.111*ind',
-                    'com_phy-phy', 'com_ind-ind', 
-                    '0.5*com_phy+0.5*com_ind-0.5*phy-0.5*ind',
-                    '0.5*com_phy+0.5*com_ind',
-                    'com_phy', 'com_ind', 'phy', 'ind',
-                    'face_third-face_noncom', 'face_first-face_noncom',
-                    'face_first-face_third',
-                    '0.5*face_third+0.5*face_first-face_noncom',
-                    '0.5*face_third+0.5*face_first',
-                    'face_third', 'face_first', 'face_noncom',
-                    '0.333*face_third+0.333*face_first+0.333*face_noncom-object',
-                    'body-object',
-                    'body', 'object'],
-    'pointlight': ['interact-noninteract', 'interact', 'noninteract'],
-    'dysoc': ['faces-objects', 'bodies-objects', 
-              '0.33*faces+0.33*bodies+0.33*objects',
-              'faces', 'bodies', 'objects'],
-    'eploc': ['emotional-physical'],
-    'tom': ['belief-photo'],
-    'familiarstand': ['FamPerson-UnfamPerson', '0.5*FamPerson+0.5*UnfamPerson'],
-}
+                    'communicate': ['com_phy-phy', 'com_ind-ind',
+                                    'com_phy', 'phy', 'com_ind', 'ind',
+                                    'face_first-face_third',
+                                    'face_first', 'face_third',
+                                    '0.5*face_third+0.5*face_first-face_noncom',
+                                    '0.5*face_third+0.5*face_first', 'face_noncom'],
+                    'pointlight': ['interact-noninteract'],
+                    'eploc': ['emotional-physical'],
+                    'tom': ['belief-photo']
+                 }
 
 
 def hyphen_to_camel_case(contrast_name):
@@ -82,7 +71,6 @@ class NilearnGLM:
         self.task_label = args.task_label
         self.space_label = args.space_label
         self.subject_label = args.subject_label
-        self.session_label = args.session_label
         self.threshold_p = 0.01
         self.TR = 2
         self.frame_threshold = 12
@@ -109,17 +97,9 @@ class NilearnGLM:
         
         # Print info to make ensure correct loading
         model, imgs, events, confounds = info2vars(model_info)
-        n = len(imgs)
 
         bad_runs = check_motion_filtering(confounds, frame_threshold=self.frame_threshold)
         print(f'{bad_runs=}')
-
-        if self.session_label is not None:
-            filtered_data = [(img, event, confound) for img, event, confound in zip(imgs, events, confounds) 
-                            if f'ses-{self.session_label}' in img]
-            imgs, events, confounds = map(list, zip(*filtered_data))
-            print('filtering sessions')
-            print(f'from {n} runs to{len(imgs)} runs')
 
         # Shift the time series because fMRIPrep slice time corrects to the middle volume
         # https://reproducibility.stanford.edu/slice-timing-correction-in-fmriprep-and-linear-modeling/
@@ -171,15 +151,13 @@ class NilearnGLM:
 def main():
     parser = argparse.ArgumentParser(description='Run a standard first-level GLM on the localizer tasks')
     parser.add_argument('--dataset_path', '-d', type=str,
-                        default='/mindhive/nklab3/users/emaliem/communicate_pilot')
-    parser.add_argument('--subject_label', '-s', type=str, default='CP03',
+                        default='/mindhive/nklab3/users/emaliem/sts_communication')
+    parser.add_argument('--subject_label', '-s', type=str, default='01',
                          help='Subject for the GLM')
-    parser.add_argument('--task_label', '-t', type=str, default='pointlight',
+    parser.add_argument('--task_label', '-t', type=str, default='communicate',
                          help='Task to run the GLM on')
     parser.add_argument('--space_label', type=str, default='MNI152NLin2009cAsym',
                          help='Space of the GLM')
-    parser.add_argument('--session_label', '-ses', type=str, default=None,
-                         help='session to filter to often of the from 01, for example')
     args = parser.parse_args()
 
     processor = NilearnGLM(args)

@@ -4,6 +4,8 @@ par=$1
 ses=$2
 src=$3
 
+scratch_top=/mindhive/nklab3/users/emaliem
+
 # Conver the DICOM to NII and convert to BIDS format
 conda activate dcm2bids
 dcm2bids -p ${par} -s ${ses} \
@@ -12,7 +14,7 @@ dcm2bids -p ${par} -s ${ses} \
 
 # Remove runs that were aborted
 python code/rm_aborted_runs.py \
-  -d /orcd/data/ngk/001/users/emaliem/sts_communication/sub-${par}/ses-${ses}/func
+  -d ${scratch_top}/sts_communication/sub-${par}/ses-${ses}/func
 
 # Plot the anatomical image
 conda deactivate

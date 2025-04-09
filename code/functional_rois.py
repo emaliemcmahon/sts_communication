@@ -8,28 +8,12 @@ from nilearn.plotting import plot_glass_brain, view_img_on_surf
 
 
 task_rois = {'pointlight': {'interactMinusNoninteract': ['SI-STS']},
-             'communicate': {'comPhyMinusPhy': ['phySTS'],
-                             'comIndMinusInd': ['indSTS'],
-                             '033faceThirdPlus033FaceFirstPlus033FaceNoncomMinusObject': ['FFA', 'fSTS'],
-                             '05faceThirdPlus05FaceFirstMinusFaceNoncom': ['facecomSTS'],
-                             'bodyMinusObject': ['EBA']},
-             'dysoc': {'facesMinusObjects': ['FFA', 'fSTS'],
-                       'bodiesMinusObjects': ['EBA'],
-                       'facesPlusBodiesPlusObjects': ['EVC', 'MT']},
              'eploc': {'emotionalMinusPhysical': ['TPJ']},
              'tom': {'beliefMinusPhoto': ['TPJ']}}
 
-roi_size = {'EVC': 0.05, 'MT': 0.1,
-            'SI-STS': .05, 
-            'phySTS': .05, 'indSTS': 0.05,
-            'facecomSTS': 0.05,
-            'FFA': .1, 'fSTS': .1, 
-            'EBA': .1, 'TPJ': .1}
+roi_size = {'SI-STS': .05, 'TPJ': .1}
 
-roi_parc = {'SI-STS': 'anatSTS',
-            'phySTS': 'anatSTS',
-            'indSTS': 'anatSTS',
-            'facecomSTS': 'anatSTS'}
+roi_parc = {'SI-STS': 'anatSTS'}
 
 def roi_switcher(roi):
     if roi in list(roi_parc.keys()):
@@ -128,7 +112,7 @@ class FunctionalROIs:
 def main():
     parser = argparse.ArgumentParser(description='Run a standard first-level GLM on the localizer tasks')
     parser.add_argument('--dataset_path', '-d', type=str,
-                        default='/mindhive/nklab3/users/emaliem/communicate_pilot')
+                        default='/mindhive/nklab3/users/emaliem/sts_communication')
     parser.add_argument('--subject_label', '-s', type=str, default='CP01',
                          help='Subject for the GLM')
     parser.add_argument('--task_label', '-t', type=str, default='eploc',

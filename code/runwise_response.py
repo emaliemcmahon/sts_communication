@@ -13,16 +13,16 @@ from nilearn.plotting import view_img_on_surf
 
 
 roi_size = {'EVC': 0.05, 'MT': 0.1,
-            'dyad-comSTS': .05, 
-            'phySTS': .05, 'indSTS': 0.05,
+            'com-indSTS': .05,
+            'com-phySTS': 0.05,
             'face-comSTS': 0.05,
             'FFA': .1, 'fSTS': .1, 
             'EBA': .1}
 
 
 roi_parc = {'dyad-comSTS': 'anatSTS',
-            'phySTS': 'anatSTS',
-            'indSTS': 'anatSTS',
+            'com-indSTS': 'anatSTS',
+            'com-phySTS': 'anatSTS',
             'face-comSTS': 'anatSTS'}
 
 
@@ -70,10 +70,14 @@ class RunwiseResponse:
         self.conditions = ['object', 'body', 
                            'face_first', 'face_third', 'face_noncom',
                            'com_phy', 'phy', 'com_ind', 'ind']
+        self.plotting_conditions = ['object',
+                                    'face_first', 'face_third', 'face_noncom',
+                                    'com_phy', 'phy', 'com_ind', 'ind']
         self.n_runs = 9
         self.hemis = ['l', 'r']
         self.rois = ['EVC', 'MT', 'FFA', 'EBA', 'fSTS',
-                     'SI-STS', 'face-comSTS', 'dyad-comSTS',
+                     'SI-STS', 'face-comSTS', 
+                     'com-indSTS', 'com-phySTS',
                      'TPJ']
         self.loc_rois = ['SI-STS', 'TPJ']
         Path(self.out_path).mkdir(parents=True, exist_ok=True)
@@ -89,14 +93,10 @@ class RunwiseResponse:
             a = np.mean([response_dict[cond] for cond in ['face_first', 'face_third']], axis=0)
             b = response_dict['face_noncom']
             out = a - b
-        elif roi == 'dyad-comSTS':
-            a = np.mean([response_dict[cond] for cond in ['com_ind', 'com_phy']], axis=0)
-            b = np.mean([response_dict[cond] for cond in ['ind', 'phy']], axis=0)
-            out = a - b
-        elif roi == 'phySTS':
-            out = response_dict['com_phy'] - response_dict['phy']
-        elif roi == 'indSTS':
+        elif roi == 'com-indSTS':
             out = response_dict['com_ind'] - response_dict['ind']
+        elif roi == 'com-phySTS':
+            out = response_dict['com_phy'] - response_dict['phy']
         elif roi == 'EBA':
             out = response_dict['body'] - response_dict['object']
         return out.flatten()
@@ -174,7 +174,6 @@ class RunwiseResponse:
         sns.set_context('talk')
         colors = [
                     "#E57373",  # Soft muted red
-                    "#FFB74D",  # Warm peachy-orange
                     "#3949AB",  # Deep muted navy (Dark Blue 1)
                     "#5C6BC0",  # Dusty periwinkle (Dark Blue 2)
                     "#90CAF9",  # Pale sky blue (Light Blue)
@@ -221,9 +220,10 @@ class RunwiseResponse:
             roi_response.to_csv(self.out_file, index=False)
         else:
             roi_response = pd.read_csv(self.out_file)
+        roi_response = roi_response.loc[roi_response['trial_type'].isin(self.plotting_conditions)].reset_index(drop=True)
         roi_response['trial_type'] = pd.Categorical(roi_response['trial_type'],
                                             ordered=True,
-                                            categories=self.conditions)
+                                            categories=self.plotting_conditions)
         roi_response['roi'] = pd.Categorical(roi_response['roi'],
                                             ordered=True,
                                             categories=self.rois)
@@ -236,8 +236,8 @@ class RunwiseResponse:
 def main():
     parser = argparse.ArgumentParser(description='Run a standard first-level GLM on the localizer tasks')
     parser.add_argument('--dataset_path', '-d', type=str,
-                        default='/mindhive/nklab3/users/emaliem/communicate_pilot')
-    parser.add_argument('--subject_label', '-s', type=str, default='CP03',
+                        default='/mindhive/nklab3/users/emaliem/sts_communication')
+    parser.add_argument('--subject_label', '-s', type=str, default='01',
                          help='Subject for the GLM')
     parser.add_argument('--space_label', type=str, default='MNI152NLin2009cAsym',
                          help='Space of the GLM')

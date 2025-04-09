@@ -9,7 +9,6 @@ contrast_names = {
                     'face_third', 'face_first', 'face_noncom',
                     'body', 'object'],
     'pointlight': ['interact', 'noninteract'],
-    'dysoc': ['faces', 'bodies', 'objects'],
     'eploc': ['emotional', 'physical'],
     'tom': ['belief', 'photo']
 }
@@ -41,7 +40,6 @@ class NilearnGLMRunwise:
         self.task_label = args.task_label
         self.space_label = args.space_label
         self.subject_label = args.subject_label
-        self.session_label = args.session_label
         self.threshold_p = 0.01
         self.TR = 2
         self.frame_threshold = 12
@@ -94,15 +92,13 @@ class NilearnGLMRunwise:
 def main():
     parser = argparse.ArgumentParser(description='Run a standard first-level GLM on the localizer tasks')
     parser.add_argument('--dataset_path', '-d', type=str,
-                        default='/mindhive/nklab3/users/emaliem/communicate_pilot')
-    parser.add_argument('--subject_label', '-s', type=str, default='CP01',
+                        default='/mindhive/nklab3/users/emaliem/sts_communication')
+    parser.add_argument('--subject_label', '-s', type=str, default='01',
                          help='Subject for the GLM')
     parser.add_argument('--task_label', '-t', type=str, default='communicate',
                          help='Task to run the GLM on')
     parser.add_argument('--space_label', type=str, default='MNI152NLin2009cAsym',
                          help='Space of the GLM')
-    parser.add_argument('--session_label', '-ses', type=str, default=None,
-                         help='session to filter to often of the from 01, for example')
     args = parser.parse_args()
 
     processor = NilearnGLMRunwise(args)
