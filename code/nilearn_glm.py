@@ -7,10 +7,12 @@ from nilearn.plotting import plot_glass_brain, view_img_on_surf
 from nilearn.plotting import plot_design_matrix
 from nilearn.interfaces.bids import save_glm_to_bids
 from nilearn.glm import threshold_stats_img
+from scipy.stats import norm
 
 
 contrast_names = {
-                    'communicate': ['com_phy-phy', 'com_ind-ind',
+                    'communicate': ['0.33*face_third+0.33*face_first+0.33*face_noncom-object', 
+                                    'com_phy-phy', 'com_ind-ind',
                                     'face_first-face_third',
                                     'face_third-face_noncom',
                                     'face_first-face_noncom',
@@ -70,7 +72,7 @@ class NilearnGLM:
         self.task_label = args.task_label
         self.space_label = args.space_label
         self.subject_label = args.subject_label
-        self.threshold_p = 0.01
+        self.threshold_p = 0.001
         self.TR = 2
         self.frame_threshold = 12
         print(vars(self))
@@ -91,7 +93,6 @@ class NilearnGLM:
                           hrf_model='spm',
                           confounds_fd_threshold=0.5, #FD in mm
                           confounds_scrub=5, #remove segments shorter than the given number after scrubbing
-                          standardize=True,
                           n_jobs=-1)
         
         # Print info to make ensure correct loading
@@ -127,24 +128,19 @@ class NilearnGLM:
             stat_map = model.compute_contrast(contrast,
                                               stat_type='t',
                                               output_type='z_score')
-            threshold_map, threshold = threshold_stats_img(stat_map,
-                                                           alpha=self.threshold_p)
-            plot_glass_brain(threshold_map,
+            plot_glass_brain(stat_map,
                              colorbar=True,
-                             threshold=threshold,
+                             threshold=norm.isf(self.threshold_p),
                              title=title,
                              plot_abs=False,
                              display_mode="x",
                              output_file=f'{output_file}.pdf')
-            view = view_img_on_surf(threshold_map,
-                                    threshold=threshold)
-            view.save_as_html(f'{output_file}.html')  
 
-        save_glm_to_bids(model, 
-                         contrasts=contrast_names[self.task_label],
-                         contrast_types={c: 't' for c in contrast_names[self.task_label]},
-                         out_dir=f'{self.out_path}',
-                         prefix=f'sub-{self.subject_label}_task-{self.task_label}')
+        # save_glm_to_bids(model, 
+        #                  contrasts=contrast_names[self.task_label],
+        #                  contrast_types={c: 't' for c in contrast_names[self.task_label]},
+        #                  out_dir=f'{self.out_path}',
+        #                  prefix=f'sub-{self.subject_label}_task-{self.task_label}')
 
 
 def main():

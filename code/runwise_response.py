@@ -60,6 +60,7 @@ class RunwiseResponse:
         self.subject_label = args.subject_label
         self.dataset_path = args.dataset_path
         self.visualize_rois = args.visualize_rois
+        self.n_runs = args.n_runs
         self.derivatives_path = f'{self.dataset_path}/derivatives'
         self.out_path = f'{self.derivatives_path}/{self.process}/sub-{self.subject_label}'
         self.out_file = f'{self.out_path}/roi_response.csv'
@@ -73,7 +74,6 @@ class RunwiseResponse:
         self.plotting_conditions = ['object',
                                     'face_first', 'face_third', 'face_noncom',
                                     'com_phy', 'phy', 'com_ind', 'ind']
-        self.n_runs = 9
         self.hemis = ['l', 'r']
         self.rois = ['EVC', 'MT', 'FFA', 'EBA', 'fSTS',
                      'SI-STS', 'face-comSTS', 
@@ -239,6 +239,8 @@ def main():
                         default='/mindhive/nklab3/users/emaliem/sts_communication')
     parser.add_argument('--subject_label', '-s', type=str, default='01',
                          help='Subject for the GLM')
+    parser.add_argument('--n_runs', '-n', type=int, default=9,
+                         help='Number of runs to load')
     parser.add_argument('--space_label', type=str, default='MNI152NLin2009cAsym',
                          help='Space of the GLM')
     parser.add_argument('--overwrite', action=argparse.BooleanOptionalAction, default=False)

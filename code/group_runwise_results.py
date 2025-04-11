@@ -67,15 +67,19 @@ class GroupRunwiseResults:
                                figsize=(10, 24))
         axes = axes.flatten()
         for ax, ((roi, hemi), df) in zip(axes, roi_response.groupby(['roi', 'hemi'], observed=True)):
-            sns.barplot(x='trial_type', y='response',
-                        hue='trial_type', legend=False,
-                        ax=ax, data=df, palette=self.palette)
-            
             if self.plot_indiv:
+                sns.barplot(x='trial_type', y='response',
+                        hue='trial_type', legend=False,
+                        ax=ax, data=df, palette=self.palette,
+                        errorbar=None)
                 sns.stripplot(x='trial_type', y='response', 
                               hue='subject_label', ax=ax,
                               legend=False, palette='gray',
                               data=df, size=10)
+            else:
+                sns.barplot(x='trial_type', y='response',
+                        hue='trial_type', legend=False,
+                        ax=ax, data=df, palette=self.palette)
 
             ax.set_xticks(range(len(self.plotting_conditions)))
             ax.set_xticklabels(self.plotting_conditions, rotation=45, ha='right')
@@ -173,7 +177,7 @@ def main():
     parser.add_argument('--n_subjs', '-n', type=int, default=4,
                         help='the number of subjects to include')
     parser.add_argument('--overwrite', action=argparse.BooleanOptionalAction, default=False)
-    parser.add_argument('--plot_indiv', action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument('--plot_indiv', action=argparse.BooleanOptionalAction, default=False)
     args = parser.parse_args()
     GroupRunwiseResults(args).run()
 

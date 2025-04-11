@@ -1,7 +1,10 @@
+import os
+import shutil
 import argparse
 from pathlib import Path
 from nilearn.glm.first_level import first_level_from_bids as flfb
 import nibabel as nib
+from tqdm import tqdm
 
 
 contrast_names = {
@@ -30,6 +33,10 @@ def check_motion_filtering(confounds, frame_threshold=5):
     return n_excluded_runs, included_runs
 
 
+def split_into_groups(items, n_groups=3):
+    return [items[i::n_groups] for i in range(n_groups)]
+
+
 class NilearnGLMRunwise:
     def __init__(self, args):
         self.process = 'NilearnGLMRunwise'
@@ -40,11 +47,11 @@ class NilearnGLMRunwise:
         self.task_label = args.task_label
         self.space_label = args.space_label
         self.subject_label = args.subject_label
-        self.threshold_p = 0.01
+        self.overwrite = args.overwrite
+        self.n_groups = args.n_groups
         self.TR = 2
         self.frame_threshold = 12
         print(vars(self))
-        Path(f'{self.out_path}/sub-{self.subject_label}').mkdir(parents=True, exist_ok=True)
 
     def glm(self):
         model_info = flfb(self.dataset_path,
@@ -61,7 +68,6 @@ class NilearnGLMRunwise:
                           hrf_model='spm',
                           confounds_fd_threshold=0.5, #FD in mm
                           confounds_scrub=5, #remove segments shorter than the given number after scrubbing
-                          standardize=True,
                           n_jobs=-1)
         
         # Print info to ensure correct loading
@@ -78,15 +84,31 @@ class NilearnGLMRunwise:
             event['onset'] = event['onset'] + 1
             events_shifted.append(event)
 
-        for run in included_runs:
-            model.fit(imgs[run], events_shifted[run], confounds[run])
+        run_groups = split_into_groups(included_runs, n_groups=self.n_groups)
+        for igroup, runs in tqdm(enumerate(run_groups),
+                                 total=self.n_groups, desc='fitting run groups'):
+            model.fit([imgs[run] for run in runs], 
+                      [events_shifted[run] for run in runs], 
+                      [confounds[run] for run in runs])
 
             # Compute the contrasts
             for contrast in contrast_names[self.task_label]:
-                title = f'sub-{self.subject_label}_task-{self.task_label}_contrast-{contrast}_run-{run+1}'
+                title = f'sub-{self.subject_label}_task-{self.task_label}_contrast-{contrast}_run-{igroup+1}'
                 output_file = f'{self.out_path}/sub-{self.subject_label}/{title}.nii.gz'            
                 stat_map = model.compute_contrast(contrast, output_type='effect_size')
                 nib.save(stat_map, output_file)
+    
+    def run(self):
+        if not os.path.exists(f'{self.out_path}/sub-{self.subject_label}'):
+            Path(f'{self.out_path}/sub-{self.subject_label}').mkdir(parents=True, exist_ok=True)
+            self.glm()
+        else:
+            if self.overwrite:
+                shutil.rmtree(f'{self.out_path}/sub-{self.subject_label}')
+                Path(f'{self.out_path}/sub-{self.subject_label}').mkdir(parents=True, exist_ok=True)
+                self.glm()
+            else:
+                print('Output already exists. To re-run pass --overwrite')
 
 
 def main():
@@ -99,10 +121,13 @@ def main():
                          help='Task to run the GLM on')
     parser.add_argument('--space_label', type=str, default='MNI152NLin2009cAsym',
                          help='Space of the GLM')
+    parser.add_argument('--n_groups', '-n', type=int, default=9,
+                         help='Number of runs to load')
+    parser.add_argument('--overwrite', action=argparse.BooleanOptionalAction, default=False)
     args = parser.parse_args()
 
     processor = NilearnGLMRunwise(args)
-    processor.glm()
+    processor.run()
 
 if __name__ == '__main__':
     main()
