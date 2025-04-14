@@ -136,11 +136,11 @@ class NilearnGLM:
                              display_mode="x",
                              output_file=f'{output_file}.pdf')
 
-        # save_glm_to_bids(model, 
-        #                  contrasts=contrast_names[self.task_label],
-        #                  contrast_types={c: 't' for c in contrast_names[self.task_label]},
-        #                  out_dir=f'{self.out_path}',
-        #                  prefix=f'sub-{self.subject_label}_task-{self.task_label}')
+        save_glm_to_bids(model, 
+                         contrasts=contrast_names[self.task_label],
+                         contrast_types={c: 't' for c in contrast_names[self.task_label]},
+                         out_dir=f'{self.out_path}',
+                         prefix=f'sub-{self.subject_label}_task-{self.task_label}')
 
 
 def main():

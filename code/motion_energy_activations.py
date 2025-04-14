@@ -4,21 +4,25 @@ import argparse
 import imageio
 import numpy as np
 from pathlib import Path
-import moten
 from tqdm import tqdm
 from glob import glob
 from skimage.transform import resize
 import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+import os
 
 
 class MotionEnergyActivations():
     def __init__(self, args):
         self.process = 'MotionEnergyActivations'
         self.top_dir = args.top_dir
+        self.overwrite = args.overwrite
         self.derivatives_dir = f'{self.top_dir}/derivatives'
         self.out_dir = f'{self.derivatives_dir}/{self.process}'
         self.video_dir = f'{self.derivatives_dir}/stimuli'
         self.out_file = f'{self.out_dir}/motion_energy.csv'
+        self.out_plot = f'{self.out_dir}/motion_energy.png'
         self.fps = 30
         self.reduce_size_prop = 0.25
         Path(self.out_dir).mkdir(parents=True, exist_ok=True)
@@ -52,16 +56,38 @@ class MotionEnergyActivations():
         videos['moten'] = out_moten
         df = videos[['video_name', 'cond_name', 'moten']]
         return df
+    
+    def plot_moten(self, df):
+        _, ax = plt.subplots(figsize=(4,3))
+        sns.barplot(x='cond_name', y='moten',
+                    ax=ax, data=df, errorbar=None)
+        sns.stripplot(x='cond_name', y='moten', 
+                       legend=False, color='black',
+                       ax=ax, data=df, dodge=True)
+        ticks = ax.get_xticklabels()
+        ax.set_xticks(range(len(ticks)))
+        ax.set_xticklabels(ticks, rotation=45, ha='right')
+        ax.spines['right'].set_visible(False)
+        ax.spines['top'].set_visible(False)
+        ax.set_xlabel('')
+        plt.tight_layout()
+        plt.savefig(self.out_plot)
 
     def run(self):
-        df = self.get_moten()
-        df.to_csv(self.out_file, index=False)
+        if (not os.path.exists(self.out_file)) or self.overwrite:
+            import moten
+            df = self.get_moten()
+            df.to_csv(self.out_file, index=False)
+        else:
+            df = pd.read_csv(self.out_file)
+        self.plot_moten(df)
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--top_dir', '-t', type=str, help='top directory',
                         default='/mindhive/nklab3/users/emaliem/sts_communication')
+    parser.add_argument('--overwrite', action=argparse.BooleanOptionalAction, default=False)
     args = parser.parse_args()
     MotionEnergyActivations(args).run()
 

@@ -94,7 +94,7 @@ def main():
                          help='The second condition for the second level analysis')
     parser.add_argument('--task_label', '-t', type=str, default='communicate',
                          help='Task to run the GLM on')
-    parser.add_argument('--n_subjs', '-n', type=int, default=3,
+    parser.add_argument('--n_subjs', '-n', type=int, default=5,
                         help='the number of subjects to include')
     parser.add_argument('--space_label', type=str, default='MNI152NLin2009cAsym',
                          help='Space of the GLM')

@@ -9,6 +9,7 @@ from tqdm import tqdm
 from itertools import permutations
 from scipy.stats import ttest_1samp
 import numpy as np
+from matplotlib.collections import  PathCollection
 
 contrasts = [('face-first', 'face-noncom'),
              ('face-third', 'face-noncom'),
@@ -72,10 +73,43 @@ class GroupRunwiseResults:
                         hue='trial_type', legend=False,
                         ax=ax, data=df, palette=self.palette,
                         errorbar=None)
-                sns.stripplot(x='trial_type', y='response', 
-                              hue='subject_label', ax=ax,
-                              legend=False, palette='gray',
-                              data=df, size=10)
+                swarm = sns.swarmplot(x='trial_type', y='response', 
+                                    #   hue='subject_label', ax=ax,
+                                      ax=ax,
+                                      legend=False, color='black',
+                                      data=df, dodge=True, size=8)
+                
+                # Get swarmplot point positions
+                swarm_positions = []
+                for collection in ax.collections:
+                    if isinstance(collection, PathCollection):  # This identifies the swarmplot points
+                        swarm_positions.append(collection.get_offsets())
+
+                # Create a dictionary to map (trial_type, subject_label) to coordinates
+                coord_dict = {}
+                for offsets in swarm_positions:
+                    for x, y in offsets:
+                        # Find which trial_type and subject_label this point corresponds to
+                        closest = df.iloc[(df['response'] - y).abs().argsort()[:1]]
+                        key = (closest['trial_type'].values[0], closest['subject_label'].values[0])
+                        coord_dict[key] = (x, y)
+
+                # Connect points for each subject in the correct order
+                for subject in df['subject_label'].unique():
+                    x_coords = []
+                    y_coords = []
+                    
+                    # Get points in the order of plotting_conditions
+                    for trial in self.plotting_conditions:
+                        key = (trial, subject)
+                        if key in coord_dict:
+                            x, y = coord_dict[key]
+                            x_coords.append(x)
+                            y_coords.append(y)
+                    
+                    # Only draw lines if we have points to connect
+                    if len(x_coords) > 1:
+                        ax.plot(x_coords, y_coords, color='black', alpha=0.3)
             else:
                 sns.barplot(x='trial_type', y='response',
                         hue='trial_type', legend=False,
@@ -91,13 +125,13 @@ class GroupRunwiseResults:
         fig.tight_layout()
         fig.savefig(f'{self.out_path}/summary.pdf')
 
-    def plot_individual_roi(self, df, hemi='r', rois=['EBA', 'SI-STS']):
+    def plot_individual_roi(self, df, hemi='r', rois=['FFA', 'EBA', 'fSTS', 'SI-STS']):
         df = df.loc[df.roi.isin(rois) & (df.hemi == hemi)]
         df.set_index('roi', inplace=True)
         sns.set_context('paper')
-        fig, axes = plt.subplots(1,len(rois),
+        fig, axes = plt.subplots(2, int(len(rois)/2),
                                  sharex=True, sharey='row',
-                                 figsize=(4, 2))
+                                 figsize=(4, 4))
         axes = axes.flatten()
         for ax, roi in zip(axes, rois):
             sns.barplot(x='trial_type', y='response',
@@ -113,7 +147,7 @@ class GroupRunwiseResults:
             ax.set_ylabel(r'$\beta$')
             ax.set_title(f'{roi}')
         fig.tight_layout()
-        fig.savefig(f'{self.out_path}/small_summary.pdf')
+        fig.savefig(f'{self.out_path}/right_small_summary.pdf')
 
     def load_data(self):
         df = []
@@ -174,7 +208,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--dataset_path', '-d', type=str,
                         default='/mindhive/nklab3/users/emaliem/sts_communication')
-    parser.add_argument('--n_subjs', '-n', type=int, default=4,
+    parser.add_argument('--n_subjs', '-n', type=int, default=5,
                         help='the number of subjects to include')
     parser.add_argument('--overwrite', action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument('--plot_indiv', action=argparse.BooleanOptionalAction, default=False)

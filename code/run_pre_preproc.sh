@@ -1,4 +1,11 @@
-# 
+#!/bin/bash -l
+
+#SBATCH
+#SBATCH --job-name=unpack
+#SBATCH --time=12:00:00
+#SBATCH --mem-per-cpu=4GB
+#SBATCH --cpus-per-task=24
+#SBATCH --exclude=node064
 
 par=$1
 ses=$2

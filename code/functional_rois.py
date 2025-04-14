@@ -113,7 +113,7 @@ def main():
     parser = argparse.ArgumentParser(description='Run a standard first-level GLM on the localizer tasks')
     parser.add_argument('--dataset_path', '-d', type=str,
                         default='/mindhive/nklab3/users/emaliem/sts_communication')
-    parser.add_argument('--subject_label', '-s', type=str, default='CP01',
+    parser.add_argument('--subject_label', '-s', type=str, default='05',
                          help='Subject for the GLM')
     parser.add_argument('--task_label', '-t', type=str, default='eploc',
                          help='Task to run the GLM on')
