@@ -25,8 +25,7 @@ class GroupRandomEffects:
         self.contrast = f'{self.condition_one}-{self.condition_two}'
         self.task_label = args.task_label
         self.space_label = args.space_label
-        self.n_subjs = args.n_subjs
-        self.subjs = [str(i+1).zfill(2) for i in range(self.n_subjs)]
+        self.subjs = [str(i).zfill(2) for i in [1, 2, 3, 4, 5, 7]]
         self.threshold = norm.isf(0.001)
         print(vars(self))
         Path(self.out_path).mkdir(parents=True, exist_ok=True)

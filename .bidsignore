@@ -1,2 +1,3 @@
-tmp_dcm2bids
+tmp_dcm2bids/
 derivatives/
+tmp/

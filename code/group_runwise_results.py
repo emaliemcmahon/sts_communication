@@ -7,7 +7,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 from itertools import permutations
-from scipy.stats import ttest_1samp
+from scipy.stats import ttest_rel
 import numpy as np
 from matplotlib.collections import  PathCollection
 
@@ -34,7 +34,7 @@ class GroupRunwiseResults:
         self.out_file = f'{self.out_path}/summary.csv'
         self.stats_file = f'{self.out_path}/stats.csv'
         self.n_subjs = args.n_subjs
-        self.subjs = [f'sub-{str(i+1).zfill(2)}' for i in range(self.n_subjs)]
+        self.subjs = [f'sub-{str(i).zfill(2)}' for i in [1,2,3,4,5,7]]
         print(vars(self))
         self.subj_colors = ['black', 'dimgray']
         self.palette = [
@@ -73,7 +73,7 @@ class GroupRunwiseResults:
                         hue='trial_type', legend=False,
                         ax=ax, data=df, palette=self.palette,
                         errorbar=None)
-                swarm = sns.swarmplot(x='trial_type', y='response', 
+                swarm = sns.stripplot(x='trial_type', y='response', 
                                     #   hue='subject_label', ax=ax,
                                       ax=ax,
                                       legend=False, color='black',
@@ -114,6 +114,8 @@ class GroupRunwiseResults:
                 sns.barplot(x='trial_type', y='response',
                         hue='trial_type', legend=False,
                         ax=ax, data=df, palette=self.palette)
+
+                
 
             ax.set_xticks(range(len(self.plotting_conditions)))
             ax.set_xticklabels(self.plotting_conditions, rotation=45, ha='right')
@@ -165,7 +167,7 @@ class GroupRunwiseResults:
             for (c1, c2) in contrasts:
                 a = roi_df.loc[c1].sort_values(by='subject_label')['response'].to_numpy()
                 b = roi_df.loc[c2].sort_values(by='subject_label')['response'].to_numpy()
-                stats = ttest_1samp(a-b, popmean=0, alternative='greater')
+                stats = ttest_rel(a, b, alternative='greater')
                 summary.append({'hemi': hemi, 'roi': roi,
                                  'c1': c1, 'c2': c2, 'diff': np.mean(a-b),
                                  't': stats.statistic, 'dof': stats.df, 

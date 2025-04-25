@@ -23,10 +23,27 @@ def extract_task_from_filename(filename):
         return match.group(1)
     return None
 
+
 class RMAbortedRuns:
     def __init__(self, directory, testing_mode):
         self.directory = directory
         self.testing_mode = testing_mode
+
+    def rename(self, file, nifti_path, new_filename, new_path):
+        # Rename the NIfTI file
+        if file != new_filename: 
+            os.rename(nifti_path, new_path)
+            print(f"Renamed {file} to {new_filename}")
+
+        # Rename the corresponding JSON file if it exists
+        json_file = file.replace('.nii.gz', '.json')
+        json_path = os.path.join(self.directory, json_file)
+        if os.path.exists(json_path):
+            new_json_filename = new_filename.replace('.nii.gz', '.json')
+            new_json_path = os.path.join(self.directory, new_json_filename)
+            if json_file != new_json_filename:
+                os.rename(json_path, new_json_path)
+            print(f"Renamed {json_file} to {new_json_filename}")
 
     def filter_and_rename_runs(self):
         """Filter runs based on TRs and rename remaining files, starting run numbering from 1 for each task."""
@@ -45,27 +62,28 @@ class RMAbortedRuns:
                 actual_trs = count_trs(nifti_path)
 
                 if actual_trs == expected_trs:
-                    # Get the current run counter for this task
-                    run_counter = task_run_counters[task]
+                    # Construct new filename with continuous run numbering for this task
+                    new_filename = re.sub(r'run-\d+', f'run-{task_run_counters[task]:02d}', file)
+                    self.rename(file, nifti_path, 
+                                new_filename,
+                                os.path.join(self.directory, new_filename))
+
+                    # Increment the run counter for this task
+                    task_run_counters[task] += 1
+                elif actual_trs > expected_trs: 
+                    print(f'cutting extra TRs from {file}')
+                    nifti_long = nib.load(nifti_path)
+                    nifti_long_arr = nifti_long.get_fdata()
+                    nifti_cut = nib.Nifti1Image(nifti_long_arr[:,:,:,:expected_trs], 
+                                                affine=nifti_long.affine,
+                                                header=nifti_long.header)
+                    nib.save(nifti_cut, nifti_path)
 
                     # Construct new filename with continuous run numbering for this task
-                    new_filename = re.sub(r'run-\d+', f'run-{run_counter:02d}', file)
-                    new_path = os.path.join(self.directory, new_filename)
-
-                    # Rename the NIfTI file
-                    if file != new_filename: 
-                        os.rename(nifti_path, new_path)
-                        print(f"Renamed {file} to {new_filename}")
-
-                    # Rename the corresponding JSON file if it exists
-                    json_file = file.replace('.nii.gz', '.json')
-                    json_path = os.path.join(self.directory, json_file)
-                    if os.path.exists(json_path):
-                        new_json_filename = new_filename.replace('.nii.gz', '.json')
-                        new_json_path = os.path.join(self.directory, new_json_filename)
-                        if json_file != new_json_filename:
-                            os.rename(json_path, new_json_path)
-                            print(f"Renamed {json_file} to {new_json_filename}")
+                    new_filename = re.sub(r'run-\d+', f'run-{task_run_counters[task]:02d}', file)
+                    self.rename(file, nifti_path, 
+                                new_filename,
+                                os.path.join(self.directory, new_filename))
 
                     # Increment the run counter for this task
                     task_run_counters[task] += 1
