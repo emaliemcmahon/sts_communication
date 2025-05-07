@@ -98,7 +98,7 @@ class NilearnGLM:
         # Print info to make ensure correct loading
         model, imgs, events, confounds = info2vars(model_info)
 
-        bad_runs = check_motion_filtering(confounds, frame_threshold=self.frame_threshold)
+        bad_runs = check_motion_filtering([confounds], frame_threshold=self.frame_threshold)
         print(f'{bad_runs=}')
 
         # Shift the time series because fMRIPrep slice time corrects to the middle volume
@@ -147,9 +147,9 @@ def main():
     parser = argparse.ArgumentParser(description='Run a standard first-level GLM on the localizer tasks')
     parser.add_argument('--dataset_path', '-d', type=str,
                         default='/mindhive/nklab3/users/emaliem/sts_communication')
-    parser.add_argument('--subject_label', '-s', type=str, default='01',
+    parser.add_argument('--subject_label', '-s', type=str, default='14',
                          help='Subject for the GLM')
-    parser.add_argument('--task_label', '-t', type=str, default='communicate',
+    parser.add_argument('--task_label', '-t', type=str, default='tom',
                          help='Task to run the GLM on')
     parser.add_argument('--space_label', type=str, default='MNI152NLin2009cAsym',
                          help='Space of the GLM')

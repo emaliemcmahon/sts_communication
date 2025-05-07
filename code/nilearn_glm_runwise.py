@@ -123,7 +123,7 @@ def main():
                          help='Space of the GLM')
     parser.add_argument('--n_groups', '-n', type=int, default=9,
                          help='Number of runs to load')
-    parser.add_argument('--overwrite', action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument('--overwrite', action=argparse.BooleanOptionalAction, default=True)
     args = parser.parse_args()
 
     processor = NilearnGLMRunwise(args)

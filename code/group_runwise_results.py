@@ -21,6 +21,17 @@ condition_rename = {'com_phy': 'com-joint', 'phy': 'joint',
                     'face_first': 'face-first', 'face_third': 'face-third',
                     'face_noncom': 'face-noncom'}
 
+def p2star(p):
+    if p < 0.05:
+        if 0.001 > p: 
+            star = '***'
+        elif 0.01 > p >= 0.001:
+            star = '**' 
+        elif 0.05 > p >= 0.01:
+            star = '*'
+    else: 
+        star = None
+    return star
 
 class GroupRunwiseResults:
     def __init__(self, args):
@@ -33,8 +44,8 @@ class GroupRunwiseResults:
         self.out_path = f'{self.derivatives_path}/{self.process}'
         self.out_file = f'{self.out_path}/summary.csv'
         self.stats_file = f'{self.out_path}/stats.csv'
-        self.n_subjs = args.n_subjs
-        self.subjs = [f'sub-{str(i).zfill(2)}' for i in [1,2,3,4,5,7]]
+        self.sub_nums = args.sub_nums
+        self.subjs = [f'sub-{str(i).zfill(2)}' for i in self.sub_nums]
         print(vars(self))
         self.subj_colors = ['black', 'dimgray']
         self.palette = [
@@ -112,10 +123,9 @@ class GroupRunwiseResults:
                         ax.plot(x_coords, y_coords, color='black', alpha=0.3)
             else:
                 sns.barplot(x='trial_type', y='response',
-                        hue='trial_type', legend=False,
-                        ax=ax, data=df, palette=self.palette)
-
-                
+                            hue='trial_type', legend=False,
+                            ax=ax, data=df, palette=self.palette,
+                            errorbar='se')
 
             ax.set_xticks(range(len(self.plotting_conditions)))
             ax.set_xticklabels(self.plotting_conditions, rotation=45, ha='right')
@@ -127,26 +137,65 @@ class GroupRunwiseResults:
         fig.tight_layout()
         fig.savefig(f'{self.out_path}/summary.pdf')
 
-    def plot_individual_roi(self, df, hemi='r', rois=['FFA', 'EBA', 'fSTS', 'SI-STS']):
-        df = df.loc[df.roi.isin(rois) & (df.hemi == hemi)]
-        df.set_index('roi', inplace=True)
+    def plot_individual_roi(self, df, stats, hemi='r', 
+                            rois=['EVC', 'MT', 'FFA', 'EBA', 'fSTS', 'SI-STS', 'TPJ']):
+        df = df.loc[df.roi.isin(rois) & (df.hemi == hemi)].set_index('roi')
+        stats = stats.loc[stats.roi.isin(rois) & (stats.hemi == hemi)].set_index('roi')
         sns.set_context('paper')
-        fig, axes = plt.subplots(2, int(len(rois)/2),
-                                 sharex=True, sharey='row',
-                                 figsize=(4, 4))
+        fig, axes = plt.subplots(1, len(rois),
+                                 figsize=(12.5, 3))
         axes = axes.flatten()
-        for ax, roi in zip(axes, rois):
+        for iroi, (ax, roi) in enumerate(zip(axes, rois)):
+            roi_stats = stats.loc[roi]
             sns.barplot(x='trial_type', y='response',
                         hue='trial_type', legend=False,
                         ax=ax, data=df.loc[roi], 
-                        palette=self.palette)
+                        palette=self.palette, errorbar='se')
+            error_max = [line.get_ydata()[1] for line in ax.lines]
 
+            face_pos = None
+            stats_pos = []
+            for _, row in roi_stats.iterrows():
+                # Get the indicies of the conditions for the axis
+                c1_ind = self.plotting_conditions.index(row['c1'])
+                c2_ind = self.plotting_conditions.index(row['c2'])
+
+                star = p2star(row['p'])
+                if star is not None:
+                    # Find the y positition to draw the line
+                    if 'face' not in row['c1']:
+                        pair_max = max([error_max[c1_ind], error_max[c2_ind]]) #top of error bar between pair
+                        y_pos = pair_max + (max(error_max)*0.05) # add 5% of the tallest error bar to the pos
+                    else:
+                        if face_pos is None:
+                            face_max = max([error_max[self.plotting_conditions.index(cond)] for cond in self.plotting_conditions if 'face' in cond])
+                            face_pos = face_max + (max(error_max)*0.05)
+                            y_pos = face_pos
+                        else:
+                            face_pos += max(error_max)*0.1
+                            y_pos = face_pos
+                            
+                    ax.hlines(xmin=c1_ind, xmax=c2_ind, y=y_pos, color='k')
+                    ax.text(x=c1_ind+((c2_ind-c1_ind)/2),
+                            y=y_pos, s=star, ha='center', 
+                            fontsize=8)
+                    stats_pos.append(y_pos)
+            
             ax.set_xticks(range(len(self.plotting_conditions)))
-            ax.set_xticklabels(self.plotting_conditions, rotation=45, ha='right')
+            ax.set_xticklabels(self.plotting_conditions, rotation=45, 
+                               ha='right', fontsize=8)
+            if stats_pos:
+                ax.set_ylim([-.1, max(stats_pos)+(max(error_max)*0.1)])
+            else:
+                ax.set_ylim([-.1, ax.get_ylim()[-1]])
+
             ax.spines['right'].set_visible(False)
             ax.spines['top'].set_visible(False)
             ax.set_xlabel('')
-            ax.set_ylabel(r'$\beta$')
+            if iroi == 0: 
+                ax.set_ylabel(r'$\beta$ values')
+            else:
+                ax.set_ylabel('')
             ax.set_title(f'{roi}')
         fig.tight_layout()
         fig.savefig(f'{self.out_path}/right_small_summary.pdf')
@@ -202,17 +251,14 @@ class GroupRunwiseResults:
                                             ordered=True,
                                             categories=self.subjs)
         self.plot_rois(mean_df)
-        self.plot_individual_roi(mean_df)
-        
-        
+        self.plot_individual_roi(mean_df, summary)  
 
 def main():
     parser = argparse.ArgumentParser()
+    parser.add_argument('sub_nums', nargs='*', type=int, help='List of elements', default=[1,2,3])
     parser.add_argument('--dataset_path', '-d', type=str,
                         default='/mindhive/nklab3/users/emaliem/sts_communication')
-    parser.add_argument('--n_subjs', '-n', type=int, default=5,
-                        help='the number of subjects to include')
-    parser.add_argument('--overwrite', action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument('--overwrite', action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument('--plot_indiv', action=argparse.BooleanOptionalAction, default=False)
     args = parser.parse_args()
     GroupRunwiseResults(args).run()

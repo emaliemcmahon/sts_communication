@@ -1,17 +1,12 @@
 import argparse
-import time
 from pathlib import Path
-from copy import copy
-from nilearn.plotting import plot_glass_brain
+from nilearn.plotting import plot_glass_brain, view_img_on_surf
 from nilearn.glm.first_level import first_level_from_bids as flfb
-import nibabel as nib
 from nilearn.glm.second_level import SecondLevelModel
-from tqdm import tqdm
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.stats import norm
-from nilearn.plotting import plot_design_matrix
-
+from nilearn.image import threshold_img
 
 class GroupRandomEffects:
     def __init__(self, args):
@@ -25,7 +20,8 @@ class GroupRandomEffects:
         self.contrast = f'{self.condition_one}-{self.condition_two}'
         self.task_label = args.task_label
         self.space_label = args.space_label
-        self.subjs = [str(i).zfill(2) for i in [1, 2, 3, 4, 5, 7]]
+        self.sub_nums = args.sub_nums
+        self.subjs = [str(i).zfill(2) for i in self.sub_nums]
         self.threshold = norm.isf(0.001)
         print(vars(self))
         Path(self.out_path).mkdir(parents=True, exist_ok=True)
@@ -41,7 +37,7 @@ class GroupRandomEffects:
                           confounds_strategy=('motion', 'scrub'),
                           confounds_motion='basic',
                           derivatives_folder=self.fmriprep_path,
-                          minimize_memory=False, 
+                          minimize_memory=True, 
                           hrf_model='spm',
                           confounds_fd_threshold=0.5, #FD in mm
                           confounds_scrub=5, #remove segments shorter than the given number after scrubbing
@@ -50,41 +46,54 @@ class GroupRandomEffects:
 
         ncols = 3
         nrows = int(np.ceil(len(models) / ncols))
-        fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(8, 3))
+        fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(16,10))
         axes = np.atleast_2d(axes)
         model_and_args = zip(models, models_run_imgs, models_events, models_confounds)
         for midx, (model, imgs, events, confounds) in enumerate(model_and_args):            
             # fit the GLM
-            model.fit(imgs, events, confounds)
-            zmap = model.compute_contrast(self.contrast)
-            plot_glass_brain(zmap,
-                             colorbar=False,
+            model.fit(imgs, events, confounds, n_jobs=-1)
+            tmap = model.compute_contrast(self.contrast,
+                                          stat_type='t',
+                                          output_type='stat')
+            colorbar = True if midx == len(self.subjs)-1 else False
+            plot_glass_brain(tmap,
+                             colorbar=colorbar,
                              threshold=self.threshold,
                              title=f"sub-{model.subject_label}",
                              axes=axes[int(midx / ncols), int(midx % ncols)],
                              display_mode="x",
                              cmap="bwr")
-        fig.suptitle(f"{self.condition_one} vs {self.condition_two} (unc p<.001)")
+        fig.suptitle(f"T-Map {self.condition_one} vs {self.condition_two} (unc p<0.001)")
         plt.savefig(f'{self.out_path}/{self.contrast}_individuals.png')
 
-        second_level_model = SecondLevelModel(smoothing_fwhm=8.0, n_jobs=2)
+        second_level_model = SecondLevelModel(smoothing_fwhm=8.0, n_jobs=-1)
         second_level_model = second_level_model.fit(models)
 
-
-        z_score = second_level_model.compute_contrast(first_level_contrast=self.contrast)
-        plot_design_matrix(second_level_model.design_matrix_,
-                           output_file=f'{self.out_path}/{self.contrast}_design.png')
-        
+        tmap = second_level_model.compute_contrast(first_level_contrast=self.contrast, 
+                                                   output_type='stat',
+                                                   second_level_stat_type='t')
+        tmap_thresholded = threshold_img(tmap, threshold=self.threshold,
+                                         copy_header=True)
         title = f"{self.condition_one} vs {self.condition_two} (unc p<0.001)"
-        plot_glass_brain(z_score,
+        plot_glass_brain(tmap_thresholded,
                          threshold=self.threshold,
+                         colorbar=True,
                          plot_abs=False,
                          title=title,
+                         cmap="bwr",
                          output_file=f'{self.out_path}/{self.contrast}_group.png')
+        view = view_img_on_surf(tmap_thresholded, 
+                                threshold=self.threshold, 
+                                bg_on_data=True,
+                                darkness=0.5,
+                                title=title)
+        view.save_as_html(f'{self.out_path}/{self.contrast}_group.html')
 
 
 def main():
     parser = argparse.ArgumentParser(description='Run a standard first-level GLM on the localizer tasks')
+    parser.add_argument('sub_nums', nargs='*', type=int, 
+                        help='List of elements', default=[1,2])
     parser.add_argument('--dataset_path', '-d', type=str,
                         default='/mindhive/nklab3/users/emaliem/sts_communication')
     parser.add_argument('--condition_one', '-c1', type=str, default='com_phy',
@@ -93,8 +102,6 @@ def main():
                          help='The second condition for the second level analysis')
     parser.add_argument('--task_label', '-t', type=str, default='communicate',
                          help='Task to run the GLM on')
-    parser.add_argument('--n_subjs', '-n', type=int, default=5,
-                        help='the number of subjects to include')
     parser.add_argument('--space_label', type=str, default='MNI152NLin2009cAsym',
                          help='Space of the GLM')
     args = parser.parse_args()
