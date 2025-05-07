@@ -1,4 +1,6 @@
 import argparse
+import os
+from tqdm import tqdm
 from pathlib import Path
 from nilearn.plotting import plot_glass_brain, view_img_on_surf
 from nilearn.glm.first_level import first_level_from_bids as flfb
@@ -7,6 +9,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.stats import norm
 from nilearn.image import threshold_img
+
 
 class GroupRandomEffects:
     def __init__(self, args):
@@ -41,7 +44,7 @@ class GroupRandomEffects:
                           hrf_model='spm',
                           confounds_fd_threshold=0.5, #FD in mm
                           confounds_scrub=5, #remove segments shorter than the given number after scrubbing
-                          n_jobs=-1)
+                          n_jobs=int(os.cpu_count()/2))
         (models, models_run_imgs, models_events, models_confounds) = model_info
 
         ncols = 3
@@ -49,9 +52,12 @@ class GroupRandomEffects:
         fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(16,10))
         axes = np.atleast_2d(axes)
         model_and_args = zip(models, models_run_imgs, models_events, models_confounds)
-        for midx, (model, imgs, events, confounds) in enumerate(model_and_args):            
+        for midx, (model, imgs, events, confounds) in tqdm(enumerate(model_and_args),
+                                                           total=len(models),
+                                                           leave=True,
+                                                           desc='First level models'):            
             # fit the GLM
-            model.fit(imgs, events, confounds, n_jobs=-1)
+            model.fit(imgs, events, confounds)
             tmap = model.compute_contrast(self.contrast,
                                           stat_type='t',
                                           output_type='stat')
@@ -65,8 +71,11 @@ class GroupRandomEffects:
                              cmap="bwr")
         fig.suptitle(f"T-Map {self.condition_one} vs {self.condition_two} (unc p<0.001)")
         plt.savefig(f'{self.out_path}/{self.contrast}_individuals.png')
+        print('Finished first level analyses')
 
-        second_level_model = SecondLevelModel(smoothing_fwhm=8.0, n_jobs=-1)
+
+        second_level_model = SecondLevelModel(smoothing_fwhm=8.0, 
+                                              n_jobs=int(os.cpu_count()/2))
         second_level_model = second_level_model.fit(models)
 
         tmap = second_level_model.compute_contrast(first_level_contrast=self.contrast, 
@@ -88,6 +97,7 @@ class GroupRandomEffects:
                                 darkness=0.5,
                                 title=title)
         view.save_as_html(f'{self.out_path}/{self.contrast}_group.html')
+        print('Finished second level analysis')
 
 
 def main():

@@ -10,12 +10,15 @@
 # c1s=(com_phy phy com_ind face_first face_first face_third)
 # c2s=(phy com_phy ind face_noncom face_third face_noncom)
 # length=${#c1s[@]}
-# for ((i=0; i<length; i++)); do sbatch run_random_effects.sh "${c1s[$i]} ${c2s[$i]}"; done
+# for ((i=0; i<length; i++)); do sbatch run_random_effects.sh ${c1s[$i]} ${c2s[$i]}; done
 
 c1=$1
 c2=$2
 
 subs=(1 2 3 4 5 7 8 9 11 12 13 14)
+
+echo "$c1 $c2"
+echo "${subs[@]}"
 
 conda activate nilearn
 
