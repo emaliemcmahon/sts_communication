@@ -66,10 +66,9 @@ class GroupRunwiseResults:
                                     'face-first', 'face-third', 'face-noncom',
                                     'com-joint', 'joint', 'com-ind', 'ind']
         self.hemis = ['l', 'r']
-        self.rois = ['EVC', 'MT', 'FFA', 'EBA', 'fSTS',
-                     'SI-STS', 'face-comSTS', 
-                      'com-indSTS', 'com-phySTS', 
-                     'TPJ']
+        self.rois = ['EVC', 'MT', 'FFA', 'EBA', 
+                     'fSTS', 'SI-STS', 'TPJ'] 
+                        #'face-comSTS', 'com-indSTS', 'com-phySTS', 
         Path(self.out_path).mkdir(exist_ok=True, parents=True)
 
     def plot_rois(self, roi_response):
@@ -218,9 +217,11 @@ class GroupRunwiseResults:
                 b = roi_df.loc[c2].sort_values(by='subject_label')['response'].to_numpy()
                 stats = ttest_rel(a, b, alternative='greater')
                 summary.append({'hemi': hemi, 'roi': roi,
-                                 'c1': c1, 'c2': c2, 'diff': np.mean(a-b),
-                                 't': stats.statistic, 'dof': stats.df, 
-                                 'p': stats.pvalue})
+                                'c1': c1, 'c2': c2, 
+                                'diff': np.mean(a-b),
+                                't': stats.statistic, 
+                                'dof': stats.df, 
+                                'p': stats.pvalue})
         summary = pd.DataFrame(summary)
         summary.to_csv(self.stats_file, index=False)
         return summary

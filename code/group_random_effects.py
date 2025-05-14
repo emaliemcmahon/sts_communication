@@ -7,9 +7,8 @@ from nilearn.glm.first_level import first_level_from_bids as flfb
 from nilearn.glm.second_level import SecondLevelModel
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy.stats import norm
-from nilearn.image import threshold_img
-
+from nilearn.glm import threshold_stats_img
+from nilearn.plotting import plot_contrast_matrix
 
 class GroupRandomEffects:
     def __init__(self, args):
@@ -20,12 +19,13 @@ class GroupRandomEffects:
         self.out_path = f'{self.derivatives_path}/{self.process}'
         self.condition_one = args.condition_one
         self.condition_two = args.condition_two
+        self.contrast_name = f'{self.condition_one}-{self.condition_two}'
         self.contrast = f'{self.condition_one}-{self.condition_two}'
         self.task_label = args.task_label
         self.space_label = args.space_label
         self.sub_nums = args.sub_nums
         self.subjs = [str(i).zfill(2) for i in self.sub_nums]
-        self.threshold = norm.isf(0.001)
+        self.alpha = 0.05
         print(vars(self))
         Path(self.out_path).mkdir(parents=True, exist_ok=True)
 
@@ -58,21 +58,38 @@ class GroupRandomEffects:
                                                            desc='First level models'):            
             # fit the GLM
             model.fit(imgs, events, confounds)
+            if type(self.contrast) is str: 
+                columns = list(model.design_matrices_[0].columns)
+                self.contrast = np.zeros(len(columns))
+
+                cond1_averaging = self.condition_one.split('+')
+                for c in cond1_averaging:
+                    self.contrast[columns.index(c)] = 1/len(cond1_averaging)
+
+                cond2_averaging = self.condition_two.split('+')
+                for c in cond2_averaging:
+                    self.contrast[columns.index(c)] = -1/len(cond2_averaging)
+
+                # Save a visualization of the contrast matrix
+                plot_contrast_matrix(self.contrast, model.design_matrices_[0],
+                                 output_file=f'{self.out_path}/{self.contrast_name}_design.png')
+
             tmap = model.compute_contrast(self.contrast,
                                           stat_type='t',
                                           output_type='stat')
-            colorbar = True if midx == len(self.subjs)-1 else False
-            plot_glass_brain(tmap,
-                             colorbar=colorbar,
-                             threshold=self.threshold,
+            tmap_thresholded, threshold = threshold_stats_img(tmap, 
+                                                              alpha=self.alpha,
+                                                              height_control='fdr')
+            plot_glass_brain(tmap_thresholded,
+                             colorbar=True,
+                             threshold=threshold,
                              title=f"sub-{model.subject_label}",
                              axes=axes[int(midx / ncols), int(midx % ncols)],
                              display_mode="x",
                              cmap="bwr")
-        fig.suptitle(f"T-Map {self.condition_one} vs {self.condition_two} (unc p<0.001)")
-        plt.savefig(f'{self.out_path}/{self.contrast}_individuals.png')
+        fig.suptitle(f"T-Map {self.condition_one} vs {self.condition_two} (FDR q<{self.alpha})")
+        plt.savefig(f'{self.out_path}/{self.contrast_name}_individuals.png')
         print('Finished first level analyses')
-
 
         second_level_model = SecondLevelModel(smoothing_fwhm=8.0, 
                                               n_jobs=int(os.cpu_count()/2))
@@ -81,22 +98,22 @@ class GroupRandomEffects:
         tmap = second_level_model.compute_contrast(first_level_contrast=self.contrast, 
                                                    output_type='stat',
                                                    second_level_stat_type='t')
-        tmap_thresholded = threshold_img(tmap, threshold=self.threshold,
-                                         copy_header=True)
-        title = f"{self.condition_one} vs {self.condition_two} (unc p<0.001)"
+        tmap_thresholded, threshold = threshold_stats_img(tmap,
+                                                          alpha=self.alpha,
+                                                          height_control='fdr')
+        title = f"{self.condition_one} vs {self.condition_two} (FDR q<{self.alpha})"
         plot_glass_brain(tmap_thresholded,
-                         threshold=self.threshold,
+                         threshold=threshold,
                          colorbar=True,
                          plot_abs=False,
                          title=title,
                          cmap="bwr",
-                         output_file=f'{self.out_path}/{self.contrast}_group.png')
+                         output_file=f'{self.out_path}/{self.contrast_name}_group.png')
         view = view_img_on_surf(tmap_thresholded, 
-                                threshold=self.threshold, 
                                 bg_on_data=True,
                                 darkness=0.5,
                                 title=title)
-        view.save_as_html(f'{self.out_path}/{self.contrast}_group.html')
+        view.save_as_html(f'{self.out_path}/{self.contrast_name}_group.html')
         print('Finished second level analysis')
 
 

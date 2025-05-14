@@ -98,7 +98,7 @@ class NilearnGLM:
         # Print info to make ensure correct loading
         model, imgs, events, confounds = info2vars(model_info)
 
-        bad_runs = check_motion_filtering([confounds], frame_threshold=self.frame_threshold)
+        bad_runs = check_motion_filtering(confounds, frame_threshold=self.frame_threshold)
         print(f'{bad_runs=}')
 
         # Shift the time series because fMRIPrep slice time corrects to the middle volume

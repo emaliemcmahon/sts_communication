@@ -8,8 +8,9 @@
 #SBATCH --exclude=node064
 
 par=$1
-ses=$2
-src=$3
+src=$2
+
+ses=01
 
 scratch_top=/mindhive/nklab3/users/emaliem
 

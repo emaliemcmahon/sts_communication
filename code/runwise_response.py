@@ -9,7 +9,7 @@ from tqdm import tqdm
 from itertools import product
 import matplotlib.pyplot as plt
 import seaborn as sns
-from nilearn.plotting import view_img_on_surf
+from nilearn.plotting import plot_glass_brain, view_img_on_surf
 from itertools import combinations
 
 
@@ -106,12 +106,10 @@ def remove_overlapping_values(original_dict, regions_to_filter):
 class RunwiseResponse:
     def __init__(self, args):
         self.process = 'RunwiseResponse'
-        self.overwrite = args.overwrite
         self.task_label = 'communicate'
         self.space_label = args.space_label
-        self.subject_label = args.subject_label
+        self.subject_label = str(args.subject_label).zfill(2)
         self.dataset_path = args.dataset_path
-        self.visualize_rois = args.visualize_rois
         self.n_runs = args.n_runs
         self.derivatives_path = f'{self.dataset_path}/derivatives'
         self.out_path = f'{self.derivatives_path}/{self.process}/sub-{self.subject_label}'
@@ -129,9 +127,8 @@ class RunwiseResponse:
                                     'com_phy', 'phy', 'com_ind', 'ind']
         self.hemis = ['l', 'r']
         self.rois = ['EVC', 'MT', 'FFA', 'EBA', 'fSTS',
-                     'SI-STS', 'face-comSTS', 
-                     'com-indSTS', 'com-phySTS',
-                     'TPJ']
+                     'SI-STS', 'TPJ']
+                    #  'face-comSTS',  'com-indSTS', 'com-phySTS',
         self.overlap_rois = ['EVC', 'FFA', 'EBA', 'MT', 'TPJ']
         self.loc_rois = ['SI-STS', 'TPJ']
         Path(self.out_path).mkdir(parents=True, exist_ok=True)
@@ -169,36 +166,34 @@ class RunwiseResponse:
         voxel_sorted_indices = voxel_sorted_indices[::-1] #sort largest to smallest
         voxels_to_keep = voxel_sorted_indices[:n_voxels_to_keep]
 
-        if self.visualize_rois: 
-            # Visualize the ROI
-            out_arr = np.zeros_like(mask_arr)
-            out_arr[voxels_to_keep] = 1
-            out = nib.Nifti1Image(out_arr.reshape(mask.shape), affine=mask.affine)
-            if run is not None: 
-                out_name = f'{self.out_path}/{hemi}{roi}_run-{run}'
-            else:
-                out_name = f'{self.out_path}/{hemi}{roi}'
-            # nib.save(out, f'{out_name}.nii.gz')
-            view = view_img_on_surf(out, threshold=0.1)
-            view.save_as_html(f'{out_name}.html')  
-            plt.close()
         return voxels_to_keep
     
     def load_responses(self):
         response_dict = []
+        affine = None
         for run in range(self.n_runs):
             response_dict.append(dict())
             for condition in self.conditions:
                 img_file = f'{self.glm_path}/sub-{self.subject_label}_task-{self.task_label}_contrast-{condition}_run-{run+1}.nii.gz'
                 response_dict[-1][condition] = nib.load(img_file).get_fdata()
-        return response_dict
+                if affine is None:
+                    affine = nib.load(img_file).affine
+        return response_dict, affine
     
-    def get_roi_response(self, responses):
+    def visualize_rois(self, out, out_name):
+        nib.save(out, f'{out_name}.nii.gz')
+        plot_glass_brain(out, f'{out_name}.pdf')
+        view = view_img_on_surf(out, threshold=0.1)
+        view.save_as_html(f'{out_name}.html')  
+        plt.close()
+
+    def get_roi_response(self, responses, affine=np.eye(4)):
         out = []
         iterator = tqdm(range(self.n_runs),
                         total=self.n_runs, leave=True,
                         desc='getting runwise response in the ROIs')
         overlap_df = []
+        roi_images = dict()
         for run in iterator:
             # Make the data frame for defining ROIs
             roi_def_response = [resp for i, resp in enumerate(responses) if i not in ([run] if isinstance(run, int) else run)]
@@ -215,6 +210,7 @@ class RunwiseResponse:
                         roi_mask = nib.load(f'{self.froi_path}/sub-{self.subject_label}_{hemi}{roi}.nii.gz')
                         roi_indices = np.where(roi_mask.get_fdata().astype(bool).flatten())[0]
                     overlap_dict[roi] = roi_indices
+            
                 # Save overlap
                 df = count_overlaps(overlap_dict)
                 df['hemi'], df['run'] = hemi, run
@@ -233,6 +229,23 @@ class RunwiseResponse:
                         out.append({'roi': roi, 'hemi': hemi,
                                     'run': run, 'trial_type': condition,
                                     'response': response.flatten()[filtered_roi_indices[roi]].mean()})
+                        
+                    # Add ROI image to the array by adding a True value to an existing array or creating new boolean array
+                    roi_array = np.zeros_like(response.flatten(), dtype='bool')
+                    roi_array[filtered_roi_indices[roi]] = True
+                    roi_array = roi_array.reshape(response.shape)
+                    if f'{hemi}{roi}' not in roi_images.keys():
+                        roi_images[f'{hemi}{roi}'] = roi_array
+                    else: 
+                        roi_images[f'{hemi}{roi}'] += roi_array
+
+        # Save the ROIs images. The images contain True if that voxel is present in any of the contrasts across runs
+        for hemi in self.hemis:
+            for roi in self.rois:
+                 roi_array = roi_images[f'{hemi}{roi}'].astype(float)
+                 roi_image = nib.Nifti1Image(roi_array,
+                                             affine=affine)
+                 self.visualize_rois(roi_image, f'{self.out_path}/{hemi}{roi}')
         
         #Get the average overlap across runs
         overlap_df = pd.concat(overlap_df).groupby(['roi1', 'roi2', 'hemi']).mean().reset_index()
@@ -267,29 +280,16 @@ class RunwiseResponse:
             ax.set_ylabel(r'$\beta$')
             ax.set_title(f'{hemi} {roi}')
 
-            ind_fig, ind_ax = plt.subplots()
-            sns.barplot(x='trial_type', y='response',
-                        hue='trial_type', legend=False,
-                        ax=ind_ax, data=df, palette=colors)
-            ind_ax.set_xticks(range(len(self.conditions)))
-            ind_ax.set_xticklabels(self.conditions, rotation=45, ha='right')
-            ind_ax.spines['right'].set_visible(False)
-            ind_ax.spines['top'].set_visible(False)
-            ind_ax.set_xlabel('')
-            ind_fig.tight_layout()
-            ind_fig.savefig(f'{self.out_path}/{hemi}{roi}.pdf')
         fig.tight_layout()
         fig.savefig(f'{self.out_path}/../sub-{self.subject_label}_summary.pdf')
 
     def run(self):
-        if not os.path.exists(self.out_file) or self.overwrite: 
-            responses = self.load_responses()
-            roi_response, overlap = self.get_roi_response(responses)
-            roi_response.to_csv(self.out_file, index=False)
-            overlap.to_csv(self.overlap_out_file, index=False)
-            overlap.to_csv(index=False)
-        else:
-            roi_response = pd.read_csv(self.out_file)
+        responses, affine = self.load_responses()
+        roi_response, overlap = self.get_roi_response(responses, affine)
+        roi_response.to_csv(self.out_file, index=False)
+        overlap.to_csv(self.overlap_out_file, index=False)
+        overlap.to_csv(index=False)
+
         roi_response = roi_response.loc[roi_response['trial_type'].isin(self.plotting_conditions)].reset_index(drop=True)
         roi_response['trial_type'] = pd.Categorical(roi_response['trial_type'],
                                             ordered=True,
@@ -307,14 +307,12 @@ def main():
     parser = argparse.ArgumentParser(description='Run a standard first-level GLM on the localizer tasks')
     parser.add_argument('--dataset_path', '-d', type=str,
                         default='/mindhive/nklab3/users/emaliem/sts_communication')
-    parser.add_argument('--subject_label', '-s', type=str, default='01',
+    parser.add_argument('--subject_label', '-s', type=int, default=1,
                          help='Subject for the GLM')
     parser.add_argument('--n_runs', '-n', type=int, default=9,
                          help='Number of runs to load')
     parser.add_argument('--space_label', type=str, default='MNI152NLin2009cAsym',
                          help='Space of the GLM')
-    parser.add_argument('--overwrite', action=argparse.BooleanOptionalAction, default=False)
-    parser.add_argument('--visualize_rois', action=argparse.BooleanOptionalAction, default=False)
     args = parser.parse_args()
 
     processor = RunwiseResponse(args)
