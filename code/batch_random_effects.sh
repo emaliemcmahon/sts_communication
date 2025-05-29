@@ -12,6 +12,8 @@
 # length=${#c1s[@]}
 # for ((i=0; i<length; i++)); do sbatch batch_random_effects.sh ${c1s[$i]} ${c2s[$i]}; done
 
+conda activate nilearn
+
 c1=$1
 c2=$2
 
@@ -20,8 +22,13 @@ subs=(1 2 3 4 5 7 8 9 11 12 13 14 15 16)
 echo "$c1 $c2"
 echo "${subs[@]}"
 
-conda activate nilearn
-
 python group_random_effects.py "${subs[@]}" \
     -c1 $c1 -c2 $c2
 
+# subs=(1 2 3 4 5 7 8 9 11 12 13 14 15 16)
+# python group_random_effects.py "${subs[@]}" \
+#     -c1 interact -c2 noninteract -t pointlight
+
+# subs=(1 3 4 5 7 8 9 11 12 13 14 15 16)
+# python group_random_effects.py "${subs[@]}" \
+#     -c1 belief -c2 photo -t tom

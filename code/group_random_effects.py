@@ -50,9 +50,10 @@ class GroupRandomEffects:
         ncols = 3
         nrows = int(np.ceil(len(models) / ncols))
         fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(16,10))
+        title = f'T-Map {self.condition_one} vs {self.condition_two} (FDR q<{self.alpha})'
         axes = np.atleast_2d(axes)
-        model_and_args = zip(models, models_run_imgs, models_events, models_confounds)
-        for midx, (model, imgs, events, confounds) in tqdm(enumerate(model_and_args),
+        model_and_args = zip(self.subjs, models, models_run_imgs, models_events, models_confounds)
+        for midx, (subj, model, imgs, events, confounds) in tqdm(enumerate(model_and_args),
                                                            total=len(models),
                                                            leave=True,
                                                            desc='First level models'):            
@@ -87,7 +88,12 @@ class GroupRandomEffects:
                              axes=axes[int(midx / ncols), int(midx % ncols)],
                              display_mode="x",
                              cmap="bwr")
-        fig.suptitle(f"T-Map {self.condition_one} vs {self.condition_two} (FDR q<{self.alpha})")
+            view = view_img_on_surf(tmap_thresholded, 
+                                threshold=threshold,
+                                bg_on_data=True,
+                                title=title)
+            view.save_as_html(f'{self.out_path}/{subj}_{self.contrast_name}.html')
+        fig.suptitle(title)
         plt.savefig(f'{self.out_path}/{self.contrast_name}_individuals.png')
         print('Finished first level analyses')
 
@@ -110,8 +116,8 @@ class GroupRandomEffects:
                          cmap="bwr",
                          output_file=f'{self.out_path}/{self.contrast_name}_group.png')
         view = view_img_on_surf(tmap_thresholded, 
+                                threshold=threshold,
                                 bg_on_data=True,
-                                darkness=0.5,
                                 title=title)
         view.save_as_html(f'{self.out_path}/{self.contrast_name}_group.html')
         print('Finished second level analysis')

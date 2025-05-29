@@ -8,7 +8,7 @@ for s in "${subs[@]}"; do
     #     python functional_rois.py -s $s -t $task
     # done 
     # python nilearn_glm_runwise.py -s $s --overwrite
-    # python runwise_response.py -s $s
+    python runwise_response.py -s $s
     python visualize_rois.py -s $s
 done
 python group_runwise_results.py "${subs[@]}" --overwrite

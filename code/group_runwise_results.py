@@ -50,6 +50,7 @@ class GroupRunwiseResults:
         self.subj_colors = ['black', 'dimgray']
         self.palette = [
                 "#E57373",  # Soft muted red
+                '#6FC276',  # Soft green
                 "#3949AB",  # Deep muted navy (Dark Blue 1)
                 "#5C6BC0",  # Dusty periwinkle (Dark Blue 2)
                 "#90CAF9",  # Pale sky blue (Light Blue)
@@ -62,7 +63,7 @@ class GroupRunwiseResults:
         self.conditions = ['object', 'body', 
                            'face_first', 'face_third', 'face_noncom',
                            'com_phy', 'phy', 'com_ind', 'ind']
-        self.plotting_conditions = ['object',
+        self.plotting_conditions = ['object', 'body',
                                     'face-first', 'face-third', 'face-noncom',
                                     'com-joint', 'joint', 'com-ind', 'ind']
         self.hemis = ['l', 'r']
