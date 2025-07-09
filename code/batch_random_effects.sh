@@ -16,14 +16,21 @@ conda activate nilearn
 
 c1=$1
 c2=$2
+task=${3:-"communicate"}
 
-subs=(1 2 3 4 5 7 8 9 11 12 13 14 15 16)
+
+if [ "$task" = "tom" ]; then
+    subs=(1 3 4 5 7 8 9 11 12 13 14 15 16)
+else
+    subs=(1 2 3 4 5 7 8 9 11 12 13 14 15 16)
+fi
+
 
 echo "$c1 $c2"
 echo "${subs[@]}"
 
 python group_random_effects.py "${subs[@]}" \
-    -c1 $c1 -c2 $c2
+    -c1 $c1 -c2 $c2 -t $task
 
 # subs=(1 2 3 4 5 7 8 9 11 12 13 14 15 16)
 # python group_random_effects.py "${subs[@]}" \

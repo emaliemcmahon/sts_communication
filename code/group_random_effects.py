@@ -9,6 +9,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from nilearn.glm import threshold_stats_img
 from nilearn.plotting import plot_contrast_matrix
+import nibabel as nib
 
 class GroupRandomEffects:
     def __init__(self, args):
@@ -25,9 +26,10 @@ class GroupRandomEffects:
         self.space_label = args.space_label
         self.sub_nums = args.sub_nums
         self.subjs = [str(i).zfill(2) for i in self.sub_nums]
-        self.alpha = 0.05
+        self.alpha = 0.001
+        self.correction = None
         print(vars(self))
-        Path(self.out_path).mkdir(parents=True, exist_ok=True)
+        Path(f'{self.out_path}/sub-group').mkdir(parents=True, exist_ok=True)
 
     def glm(self):
         model_info = flfb(self.dataset_path,
@@ -57,6 +59,7 @@ class GroupRandomEffects:
                                                            total=len(models),
                                                            leave=True,
                                                            desc='First level models'):            
+            Path(f'{self.out_path}/sub-{subj}').mkdir(exist_ok=True, parents=True)
             # fit the GLM
             model.fit(imgs, events, confounds)
             if type(self.contrast) is str: 
@@ -80,7 +83,7 @@ class GroupRandomEffects:
                                           output_type='stat')
             tmap_thresholded, threshold = threshold_stats_img(tmap, 
                                                               alpha=self.alpha,
-                                                              height_control='fdr')
+                                                              height_control=self.correction)
             plot_glass_brain(tmap_thresholded,
                              colorbar=True,
                              threshold=threshold,
@@ -89,12 +92,16 @@ class GroupRandomEffects:
                              display_mode="x",
                              cmap="bwr")
             view = view_img_on_surf(tmap_thresholded, 
-                                threshold=threshold,
-                                bg_on_data=True,
-                                title=title)
-            view.save_as_html(f'{self.out_path}/{subj}_{self.contrast_name}.html')
+                                    surf_mesh='fsaverage',
+                                    threshold=threshold,
+                                    bg_on_data=True,
+                                    darkness=0.5,
+                                    title=title, 
+                                    colorbar_height=0.75)
+            nib.save(tmap, f'{self.out_path}/sub-{subj}/sub-{subj}_contrast-{self.contrast_name}_stat-tmap.nii.gz')
+            view.save_as_html(f'{self.out_path}/sub-{subj}/sub-{subj}_{self.contrast_name}.html')
         fig.suptitle(title)
-        plt.savefig(f'{self.out_path}/{self.contrast_name}_individuals.png')
+        plt.savefig(f'{self.out_path}/sub-group/{self.contrast_name}_individuals.png')
         print('Finished first level analyses')
 
         second_level_model = SecondLevelModel(smoothing_fwhm=8.0, 
@@ -104,9 +111,10 @@ class GroupRandomEffects:
         tmap = second_level_model.compute_contrast(first_level_contrast=self.contrast, 
                                                    output_type='stat',
                                                    second_level_stat_type='t')
+        nib.save(tmap, f'{self.out_path}/sub-group/contrast-{self.contrast_name}_stat-tmap.nii.gz')
         tmap_thresholded, threshold = threshold_stats_img(tmap,
                                                           alpha=self.alpha,
-                                                          height_control='fdr')
+                                                          height_control=self.correction)
         title = f"{self.condition_one} vs {self.condition_two} (FDR q<{self.alpha})"
         plot_glass_brain(tmap_thresholded,
                          threshold=threshold,
@@ -114,12 +122,15 @@ class GroupRandomEffects:
                          plot_abs=False,
                          title=title,
                          cmap="bwr",
-                         output_file=f'{self.out_path}/{self.contrast_name}_group.png')
+                         output_file=f'{self.out_path}/sub-group/contrast-{self.contrast_name}_stat-tmap.png')
         view = view_img_on_surf(tmap_thresholded, 
+                                surf_mesh='fsaverage',
                                 threshold=threshold,
                                 bg_on_data=True,
-                                title=title)
-        view.save_as_html(f'{self.out_path}/{self.contrast_name}_group.html')
+                                darkness=0.5,
+                                title=title, 
+                                colorbar_height=0.75)
+        view.save_as_html(f'{self.out_path}/sub-group/contrast-{self.contrast_name}_stat-tmap.html')
         print('Finished second level analysis')
 
 
