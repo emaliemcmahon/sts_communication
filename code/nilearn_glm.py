@@ -11,11 +11,13 @@ from scipy.stats import norm
 
 
 contrast_names = {
-                    'communicate': ['0.33*face_third+0.33*face_first+0.33*face_noncom-object', 
+                    'communicate': ['0.5*face_third+0.5*face_noncom-object', 
+                                    'face_third-object', 
                                     'com_phy-phy', 'com_ind-ind',
                                     'face_first-face_third',
                                     'face_third-face_noncom',
                                     'face_first-face_noncom',
+                                    'body-object',
                                     '0.5*face_third+0.5*face_first-face_noncom'],
                     'pointlight': ['interact-noninteract'],
                     'eploc': ['emotional-physical'],
@@ -71,7 +73,7 @@ class NilearnGLM:
         self.out_path = f'{self.derivatives_path}/{self.process}'
         self.task_label = args.task_label
         self.space_label = args.space_label
-        self.subject_label = args.subject_label
+        self.subject_label = str(args.subject_label).zfill(2)
         self.threshold_p = 0.001
         self.TR = 2
         self.frame_threshold = 12
@@ -133,7 +135,6 @@ class NilearnGLM:
                              threshold=norm.isf(self.threshold_p),
                              title=title,
                              plot_abs=False,
-                             display_mode="x",
                              output_file=f'{output_file}.pdf')
 
         save_glm_to_bids(model, 
@@ -147,7 +148,7 @@ def main():
     parser = argparse.ArgumentParser(description='Run a standard first-level GLM on the localizer tasks')
     parser.add_argument('--dataset_path', '-d', type=str,
                         default='/mindhive/nklab3/users/emaliem/sts_communication')
-    parser.add_argument('--subject_label', '-s', type=str, default='14',
+    parser.add_argument('--subject_label', '-s', type=int, default=14,
                          help='Subject for the GLM')
     parser.add_argument('--task_label', '-t', type=str, default='tom',
                          help='Task to run the GLM on')
