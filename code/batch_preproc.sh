@@ -19,10 +19,11 @@ output_dir=${bids_dir}/derivatives/fmriprep
 cd $singularity_dir
 
 singularity run --cleanenv -B $scratch_top \
-fmriprep-24.1.1.simg \
-$bids_dir $output_dir participant \
+fmriprep-25.1.3.simg \
+$bids_dir $output_dir participant -vvv \
 --participant-label $sid \
---n_cpus 24 --omp-nthreads 6 \
+--n_cpus 24 --omp-nthreads 4 \
 --output-space T1w MNI152NLin2009cAsym \
---bold2anat-dof 6 \
+--use-syn-sdc \
+--stop-on-first-crash \
 --fs-license-file $fs_license_file 
