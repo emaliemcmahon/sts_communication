@@ -6,8 +6,11 @@
 #SBATCH --mem-per-cpu=4GB
 #SBATCH --cpus-per-task=24
 #SBATCH --exclude=node064
+#SBATCH --output=logs/%x_%A.out
 
 sid=$1
+
+echo "Starting running fMRIPrep for s=$sid"
 
 # scratch_top=/orcd/data/ngk/001/users/emaliem
 scratch_top=/mindhive/nklab3/users/emaliem
@@ -19,11 +22,9 @@ output_dir=${bids_dir}/derivatives/fmriprep
 cd $singularity_dir
 
 singularity run --cleanenv -B $scratch_top \
-fmriprep-25.1.3.simg \
-$bids_dir $output_dir participant -vvv \
+fmriprep-24.1.1.simg \
+$bids_dir $output_dir participant \
 --participant-label $sid \
---n_cpus 24 --omp-nthreads 4 \
+--n_cpus 24 --omp-nthreads 8 \
 --output-space T1w MNI152NLin2009cAsym \
---use-syn-sdc \
---stop-on-first-crash \
---fs-license-file $fs_license_file 
+--fs-license-file $fs_license_file

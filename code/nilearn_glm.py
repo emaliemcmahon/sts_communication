@@ -1,5 +1,6 @@
 import argparse
 import time
+from glob import glob
 from pathlib import Path
 from nilearn.glm.first_level import first_level_from_bids as flfb
 from nilearn.plotting import plot_glass_brain, view_img_on_surf
@@ -8,17 +9,11 @@ from nilearn.interfaces.bids import save_glm_to_bids
 from nilearn.glm import threshold_stats_img
 import nibabel as nib
 from nilearn.datasets import load_mni152_brain_mask
-
+from nilearn.masking import apply_mask, unmask, intersect_masks
 
 contrast_names = {
                     'communicate': ['0.5*face_third+0.5*face_noncom-object', 
-                                    'face_third-object', 
-                                    'com_phy-phy', 'com_ind-ind',
-                                    'face_first-face_third',
-                                    'face_third-face_noncom',
-                                    'face_first-face_noncom',
-                                    'body-object',
-                                    '0.5*face_third+0.5*face_first-face_noncom'],
+                                    'body-object'],
                     'pointlight': ['interact-noninteract'],
                     'eploc': ['emotional-physical'],
                     'tom': ['belief-photo']
@@ -62,20 +57,22 @@ def check_motion_filtering(confounds, frame_threshold=5):
             bad_runs += 1
     return bad_runs
 
+def compute_snr(img_list, mask, output_file=None):
+    mask = nib.load(mask) if type(mask) is str else mask
 
-def compute_snr(img_list, output_file=None):
     affine = None
     counter = 0 
     for img_file in img_list:
         counter += 1
+
+        img = nib.load(img_file)
+        img_arr = unmask(apply_mask(img, mask), mask).get_fdata()
+
         if affine is None: 
-            img = nib.load(img_file)
-            img_arr = img.get_fdata()
             affine = img.affine
             avg = img_arr.mean(axis=-1)
             sd = img_arr.std(axis=-1)
         else:
-            img_arr = nib.load(img_file).get_fdata()
             avg += img_arr.mean(axis=-1)
             sd += img_arr.std(axis=-1)
     # The the mean across runs
@@ -114,11 +111,17 @@ class NilearnGLM:
         print(vars(self))
         Path(f'{self.out_path}/sub-{self.subject_label}').mkdir(parents=True, exist_ok=True)
 
+    def load_mask(self):
+        mask_files = sorted(glob(f'{self.fmriprep_path}/sub-{self.subject_label}/ses-01/func/*{self.task_label}*{self.space_label}*brain_mask.nii.gz'))
+        masks = [nib.load(mask_file) for mask_file in mask_files]
+        return intersect_masks(masks)
+
     def glm(self):
+        mask = self.load_mask()
         model_info = flfb(self.dataset_path,
                           self.task_label,
                           self.space_label,
-                        #   mask_img=self.mask,
+                          mask_img=mask,
                           sub_labels=[self.subject_label],
                           slice_time_ref=None, # Load from the BIDS data
                           smoothing_fwhm=5.0,
@@ -130,6 +133,7 @@ class NilearnGLM:
                           hrf_model='spm',
                           confounds_fd_threshold=0.5, #FD in mm
                           confounds_scrub=5, #remove segments shorter than the given number after scrubbing
+                          confounds_std_dvars_threshold=1.5,
                           n_jobs=-1)
         
         # Print info to make ensure correct loading
@@ -137,7 +141,7 @@ class NilearnGLM:
 
         # Check SNR
         output_file = f'{self.out_path}/sub-{self.subject_label}/sub-{self.subject_label}_task-{self.task_label}_stat-snr.pdf'
-        snr = compute_snr(imgs, output_file=output_file)
+        snr = compute_snr(imgs, mask, output_file=output_file)
 
         bad_runs = check_motion_filtering(confounds, frame_threshold=self.frame_threshold)
         print(f'{bad_runs=}')

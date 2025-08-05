@@ -2,10 +2,11 @@
 
 #SBATCH
 #SBATCH --job-name=random_effects
-#SBATCH --time=6:00:00
+#SBATCH --time=3:00:00
 #SBATCH --mem-per-cpu=4GB
 #SBATCH --cpus-per-task=24
 #SBATCH --exclude=node064
+#SBATCH --output=logs/%x_%A.out
 
 # c1s=(com_phy com_ind face_first face_first face_third face_first+face_third com_phy+com_ind face_noncom+face_third body)
 # c2s=(phy ind face_noncom face_third face_noncom face_noncom phy+ind object object)
@@ -29,13 +30,5 @@ fi
 echo "$c1 $c2"
 echo "${subs[@]}"
 
-python group_random_effects.py "${subs[@]}" \
+python code/group_random_effects.py "${subs[@]}" \
     -c1 $c1 -c2 $c2 -t $task
-
-# subs=(1 2 3 4 5 7 8 9 11 12 13 14 15 16)
-# python group_random_effects.py "${subs[@]}" \
-#     -c1 interact -c2 noninteract -t pointlight
-
-# subs=(1 3 4 5 7 8 9 11 12 13 14 15 16)
-# python group_random_effects.py "${subs[@]}" \
-#     -c1 belief -c2 photo -t tom

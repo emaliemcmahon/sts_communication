@@ -1,20 +1,38 @@
 import os
 import shutil
 import argparse
+from glob import glob
 from pathlib import Path
 from nilearn.glm.first_level import first_level_from_bids as flfb
 import nibabel as nib
 from tqdm import tqdm
+from nilearn.masking import intersect_masks
+from nilearn.plotting import plot_glass_brain
+import numpy as np
+import matplotlib.pyplot as plt
+from itertools import product
 
-
-contrast_names = {
-    'communicate': ['com_phy', 'com_ind', 'phy', 'ind',
+response_contrasts = ['com_phy', 'com_ind', 'phy', 'ind',
                     'face_third', 'face_first', 'face_noncom',
-                    'body', 'object'],
-    'pointlight': ['interact', 'noninteract'],
-    'eploc': ['emotional', 'physical'],
-    'tom': ['belief', 'photo']
-}
+                    'body', 'object']
+
+froi_contrasts = {'body-object': ['EBA'],
+                  '0.5*face_third+0.5*face_noncom-object': ['fSTS', 'FFA'],
+                  'com_phy-phy': ['comphy-STS'],
+                   'com_ind-ind': ['comind-STS']}
+
+roi_size = {'comphy-STS': .05, 'comind-STS': .05,
+            'EBA': .1, 'fSTS': .1, 'FFA': .1}
+
+roi_parc = {'comphy-STS': 'anatSTS',
+            'comind-STS': 'anatSTS'}
+
+
+def roi_switcher(roi):
+    if roi in list(roi_parc.keys()):
+        return roi_parc[roi]
+    else:
+        return roi
 
 
 def info2vars(model_info):
@@ -37,26 +55,175 @@ def split_into_groups(items, n_groups=3):
     return [items[i::n_groups] for i in range(n_groups)]
 
 
+def hyphen_to_camel_case(contrast_name):
+    """
+    Converts a hyphen-separated contrast name into a camelCase-style contrast name.
+
+    Parameters:
+    contrast_name (str): The contrast name with hyphens (e.g., 'emotional-physical').
+
+    Returns:
+    str: The contrast name in camelCase (e.g., 'emotionalMinusPhysical').
+    """
+    def replace_symbol(out, symbol, name=None):
+        parts = out.split(symbol)   
+        part1 =  parts[0]
+        part2 = f'{symbol}'.join(parts[1:])
+        if name is not None:
+            out = part1 + name + part2[0].upper() + part2[1:]
+        else:
+            out = part1 + part2[0].upper() + part2[1:]
+        return out
+    out = contrast_name.replace('.', '').replace('*', '')
+    for symbol, name in zip(['+', '-', '_'], ['Plus', 'Minus', None]):
+        while symbol in out: 
+            out = replace_symbol(out, symbol, name)
+    return out
+
+
+def selective_mask_img(mask_file, img_file, keep_prop=0.1, debug_output=None):
+    """
+    Create a new mask by selecting top positive voxels within a parcel.
+    Number of voxels to keep is based on total parcel size.
+    
+    Args:
+        mask_file: Path to binary mask NIfTI file
+        img_file: Path to reference image NIfTI file
+        keep_prop: Proportion of total parcel voxels to keep (0-1)
+        debug_output: Path to save debug plots (None to skip saving)
+        
+    Returns:
+        New NIfTI image with selected voxels
+    """
+    # Load data with sanity checks
+    mask = nib.load(mask_file)
+    img = nib.load(img_file)
+    
+    print("\n=== INPUT VALIDATION ===")
+    print(f"Image shape: {img.shape} | Mask shape: {mask.shape}")
+    
+    if img.shape != mask.shape:
+        raise ValueError("Image and mask must have identical dimensions")
+    
+    # Initialize debug plot if needed
+    if debug_output is not None:
+        fig, axes = plt.subplots(2, 2, figsize=(15, 10))
+        plot_glass_brain(img, title="Original Image", 
+                        axes=axes[0,0], 
+                        plot_abs=False,
+                        colorbar=True)
+        plot_glass_brain(mask, title="Original Mask", axes=axes[0,1])
+    
+    # Get data arrays
+    mask_data = mask.get_fdata()
+    img_data = img.get_fdata()
+    
+    # Check mask is binary
+    unique_mask_vals = np.unique(mask_data)
+    print(f"\n=== MASK VALIDATION ===")
+    print(f"Unique mask values: {unique_mask_vals}")
+    
+    if len(unique_mask_vals) > 2:
+        print("WARNING: Mask appears non-binary - thresholding at 0.5")
+        mask_data = (mask_data > 0.5).astype(np.int8)
+    
+    # Calculate parcel information
+    parcel_size = np.sum(mask_data > 0)
+    voxels_to_keep = int(parcel_size * keep_prop)
+    
+    print(f"\n=== VOXEL SELECTION ===")
+    print(f"Parcel size: {parcel_size} voxels")
+    print(f"Attempting to select top {voxels_to_keep} positive voxels ({keep_prop*100:.1f}% of parcel)")
+    
+    if voxels_to_keep == 0:
+        raise ValueError("No voxels to select - check your mask and keep_prop")
+    
+    # Get positive voxels within mask
+    positive_voxels_mask = (mask_data > 0) & (img_data > 0)
+    positive_voxel_indices = np.where(positive_voxels_mask.flatten())[0]
+    positive_voxel_values = img_data.flatten()[positive_voxel_indices]
+    
+    print(f"Found {len(positive_voxel_values)} positive voxels in parcel")
+    print(f"Response range: {np.min(positive_voxel_values):.2f} to {np.max(positive_voxel_values):.2f}")
+    
+    # Determine how many we can actually select (up to voxels_to_keep)
+    actual_voxels_to_select = min(voxels_to_keep, len(positive_voxel_values))
+    
+    if actual_voxels_to_select < voxels_to_keep:
+        print(f"WARNING: Only selecting {actual_voxels_to_select} voxels (not enough positive values)")
+    
+    # Select top voxels
+    if actual_voxels_to_select > 0:
+        sorted_indices = np.argsort(positive_voxel_values)[::-1][:actual_voxels_to_select]
+        selected_flat_indices = positive_voxel_indices[sorted_indices]
+    else:
+        selected_flat_indices = np.array([], dtype=int)
+    
+    # Create new mask
+    new_mask_flat = np.zeros(img_data.size)
+    new_mask_flat[selected_flat_indices] = 1
+    new_mask = new_mask_flat.reshape(img_data.shape)
+    
+    # Verification
+    actual_voxels_kept = np.sum(new_mask)
+    print(f"\n=== VERIFICATION ===")
+    print(f"Requested voxels: {voxels_to_keep} | Selected voxels: {actual_voxels_kept}")
+    
+    # Create output image
+    output_img = nib.Nifti1Image(new_mask.astype(np.int8), img.affine)
+    
+    # Visualize results
+    if debug_output is not None:
+        plot_glass_brain(output_img, 
+                        title=f"Selected {actual_voxels_kept} voxels", 
+                        axes=axes[1,0])
+        
+        # Plot histogram
+        axes[1,1].hist(positive_voxel_values, bins=50, alpha=0.7, label='All positive voxels')
+        if actual_voxels_to_select > 0:
+            selected_values = positive_voxel_values[sorted_indices]
+            axes[1,1].hist(selected_values, bins=50, alpha=0.7, 
+                          label='Selected voxels', color='red')
+        axes[1,1].set_title("Response Value Distribution")
+        axes[1,1].legend()
+        axes[1,1].set_xlabel("Response value")
+        axes[1,1].set_ylabel("Count")
+        
+        plt.tight_layout()
+        plt.savefig(debug_output)
+        plt.close()
+    
+    return output_img
+
+
 class NilearnGLMRunwise:
     def __init__(self, args):
         self.process = 'NilearnGLMRunwise'
-        self.dataset_path = args.dataset_path
-        self.derivatives_path = f'{self.dataset_path}/derivatives'
-        self.fmriprep_path = f'{self.derivatives_path}/fmriprep'
-        self.out_path = f'{self.derivatives_path}/{self.process}'
         self.task_label = args.task_label
         self.space_label = args.space_label
         self.subject_label = args.subject_label
+        self.dataset_path = args.dataset_path
         self.overwrite = args.overwrite
         self.n_groups = args.n_groups
+        self.derivatives_path = f'{self.dataset_path}/derivatives'
+        self.fmriprep_path = f'{self.derivatives_path}/fmriprep'
+        self.parcel_path = f'{self.derivatives_path}/parcels-{self.space_label}'
+        self.out_path = f'{self.derivatives_path}/{self.process}'
         self.TR = 2
         self.frame_threshold = 12
         print(vars(self))
 
+    def load_mask(self):
+        mask_files = sorted(glob(f'{self.fmriprep_path}/sub-{self.subject_label}/ses-01/func/*{self.task_label}*{self.space_label}*brain_mask.nii.gz'))
+        masks = [nib.load(mask_file) for mask_file in mask_files]
+        return intersect_masks(masks)
+
     def glm(self):
+        mask = self.load_mask()
         model_info = flfb(self.dataset_path,
                           self.task_label,
                           self.space_label,
+                          mask_img=mask,
                           sub_labels=[self.subject_label],
                           slice_time_ref=None, # Load from the BIDS data
                           smoothing_fwhm=5.0,
@@ -68,6 +235,7 @@ class NilearnGLMRunwise:
                           hrf_model='spm',
                           confounds_fd_threshold=0.5, #FD in mm
                           confounds_scrub=5, #remove segments shorter than the given number after scrubbing
+                          confounds_std_dvars_threshold=1.5,
                           n_jobs=-1)
         
         # Print info to ensure correct loading
@@ -87,16 +255,34 @@ class NilearnGLMRunwise:
         run_groups = split_into_groups(included_runs, n_groups=self.n_groups)
         for igroup, runs in tqdm(enumerate(run_groups),
                                  total=self.n_groups, desc='fitting run groups'):
-            model.fit([imgs[run] for run in runs], 
-                      [events_shifted[run] for run in runs], 
-                      [confounds[run] for run in runs])
+            # Compute the model and contrasts to define the fROIs
+            model.fit([imgs[r] for r in included_runs if r not in runs], 
+                                [events_shifted[r] for r in included_runs if r not in runs],
+                                [confounds[r] for r in included_runs if r not in runs])
+            for contrast in froi_contrasts.keys():
+                contrast_name = hyphen_to_camel_case(contrast)
+                title = f'sub-{self.subject_label}_task-{self.task_label}_contrast-{contrast_name}_run-{igroup+1}'
+                contrast_file = f'{self.out_path}/sub-{self.subject_label}/{title}.nii.gz'            
+                stat_map = model.compute_contrast(contrast, output_type='z_score')
+                nib.save(stat_map, contrast_file)
 
-            # Compute the contrasts
-            for contrast in contrast_names[self.task_label]:
+                for hemi, roi in product(['l', 'r'], froi_contrasts[contrast]):
+                    output_file = f'{self.out_path}/sub-{self.subject_label}/sub-{self.subject_label}_run-{igroup+1}_{hemi}{roi}'      
+                    mask_file = f'{self.parcel_path}/{hemi}{roi_switcher(roi)}.nii.gz'
+                    new_mask = selective_mask_img(mask_file, contrast_file, 
+                                                  keep_prop=roi_size[roi],
+                                                  debug_output=f'{output_file}.pdf')
+                    nib.save(new_mask, f'{output_file}.nii.gz')
+
+            # Compute the model and contrasts to estimate the responses
+            model.fit([imgs[r] for r in included_runs if r in runs], 
+                      [events_shifted[r] for r in included_runs if r in runs],
+                      [confounds[r] for r in included_runs if r in runs])
+            for contrast in response_contrasts:
                 title = f'sub-{self.subject_label}_task-{self.task_label}_contrast-{contrast}_run-{igroup+1}'
-                output_file = f'{self.out_path}/sub-{self.subject_label}/{title}.nii.gz'            
+                contrast_file = f'{self.out_path}/sub-{self.subject_label}/{title}.nii.gz' 
                 stat_map = model.compute_contrast(contrast, output_type='effect_size')
-                nib.save(stat_map, output_file)
+                nib.save(stat_map, contrast_file)
     
     def run(self):
         if not os.path.exists(f'{self.out_path}/sub-{self.subject_label}'):
@@ -115,7 +301,7 @@ def main():
     parser = argparse.ArgumentParser(description='Run a standard first-level GLM on the localizer tasks')
     parser.add_argument('--dataset_path', '-d', type=str,
                         default='/mindhive/nklab3/users/emaliem/sts_communication')
-    parser.add_argument('--subject_label', '-s', type=str, default='01',
+    parser.add_argument('--subject_label', '-s', type=str, default='02',
                          help='Subject for the GLM')
     parser.add_argument('--task_label', '-t', type=str, default='communicate',
                          help='Task to run the GLM on')
