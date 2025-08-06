@@ -137,7 +137,7 @@ class GroupRandomEffects:
 def main():
     parser = argparse.ArgumentParser(description='Run a standard first-level GLM on the localizer tasks')
     parser.add_argument('sub_nums', nargs='*', type=int, 
-                        help='List of elements', default=[1,2])
+                        help='List of elements', default=[1,2,3])
     parser.add_argument('--dataset_path', '-d', type=str,
                         default='/mindhive/nklab3/users/emaliem/sts_communication')
     parser.add_argument('--condition_one', '-c1', type=str, default='com_phy',
