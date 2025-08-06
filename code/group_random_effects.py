@@ -140,9 +140,9 @@ def main():
                         help='List of elements', default=[1,2,3])
     parser.add_argument('--dataset_path', '-d', type=str,
                         default='/mindhive/nklab3/users/emaliem/sts_communication')
-    parser.add_argument('--condition_one', '-c1', type=str, default='com_phy',
+    parser.add_argument('--condition_one', '-c1', type=str, default='com_ind',
                          help='The first condition for the second level analysis')
-    parser.add_argument('--condition_two', '-c2', type=str, default='phy',
+    parser.add_argument('--condition_two', '-c2', type=str, default='ind',
                          help='The second condition for the second level analysis')
     parser.add_argument('--task_label', '-t', type=str, default='communicate',
                          help='Task to run the GLM on')
