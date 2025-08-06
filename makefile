@@ -3,7 +3,7 @@ project_path=/mindhive/nklab3/users/$(user)/sts_communication
 subs := 01 02 03 04 05 07 08 09 11 12 13 14 15 16
 
 # Steps to run
-all: preprocess rois first_level_runwise random_effects
+all: preprocess rois first_level_runwise random_effects group_runwise
 
 # Preprocess fMRI data with fRMIPrep
 preprocess:
@@ -43,5 +43,8 @@ random_effects:
 	$(foreach i, $(shell seq 1 $(LENGTH)), \
 		$(eval C1 := $(word $(i),$(C1S))) \
 		$(eval C2 := $(word $(i),$(C2S))) \
-		sbatch batch_random_effects.sh $(C1) $(C2); \
+		sbatch $(project_path)/code/batch_random_effects.sh $(C1) $(C2); \
 	)
+
+group_runwise:
+	sbatch $(project_path)/code/batch_group_runwise.sh

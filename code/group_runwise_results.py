@@ -310,7 +310,8 @@ class GroupRunwiseResults:
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('sub_nums', nargs='*', type=int, help='List of elements', default=[1,2,3,4,5,7,8,9,11,12,13,14,15,16])
+    parser.add_argument('sub_nums', nargs='*', type=int, help='List of elements', 
+                        default=[1,2,3,4,5,7,8,9,11,12,13,14,15,16])
     parser.add_argument('--dataset_path', '-d', type=str,
                         default='/mindhive/nklab3/users/emaliem/sts_communication')
     parser.add_argument('--overwrite', action=argparse.BooleanOptionalAction, default=False)
