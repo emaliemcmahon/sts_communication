@@ -158,7 +158,7 @@ class FunctionalROIs:
             if contrast != 'None': 
                 for hemi, roi in product(['l', 'r'], rois):
                     print(f'{roi=}')
-                    output_file = f'{self.out_path}/sub-{self.subject_label}_{hemi}{roi}'
+                    output_file = f'{self.out_path}/sub-{self.subject_label}_hemi-{hemi}_roi-{roi}_mask'
                     parc_name = roi_switcher(roi)
                     contrast_file = f'{self.glm_path}/sub-{self.subject_label}/sub-{self.subject_label}_task-{self.task_label}_contrast-{contrast}_stat-z_statmap.nii.gz'
                     mask_file = f'{self.parcel_path}/{hemi}{parc_name}.nii.gz'
@@ -169,7 +169,7 @@ class FunctionalROIs:
             else:
                 for hemi in ['l', 'r']:
                     parc_file = f'{self.parcel_path}/{hemi}{self.task_label}.nii.gz'
-                    output_file = f'{self.out_path}/sub-{self.subject_label}_{hemi}{self.task_label}'
+                    output_file = f'{self.out_path}/sub-{self.subject_label}_hemi-{hemi}_task-{self.task_label}_mask'
                     shutil.copyfile(parc_file, f'{output_file}.nii.gz')
 
                     img = nib.load(f'{output_file}.nii.gz')
