@@ -50,12 +50,19 @@ def info2vars(model_info):
     return models[0], imgs[0], events[0], confounds[0]
 
 
-def check_motion_filtering(confounds, frame_threshold=5):
+def check_motion_filtering(imgs, events, confounds, frame_threshold=5):
+    imgs_out = []
+    events_out = []
+    confounds_out = []
     bad_runs = 0
-    for confound in confounds: 
+    for img, event, confound in zip(imgs, events, confounds): 
         if confound['rot_x'].isna().sum() > frame_threshold: 
             bad_runs += 1
-    return bad_runs
+        else:
+            imgs_out.append(img)
+            events_out.append(event)
+            confounds_out.append(confound)
+    return imgs_out, events_out, confounds_out, bad_runs
 
 def compute_snr(img_list, mask, output_file=None):
     mask = nib.load(mask) if type(mask) is str else mask
@@ -143,7 +150,9 @@ class NilearnGLM:
         output_file = f'{self.out_path}/sub-{self.subject_label}/sub-{self.subject_label}_task-{self.task_label}_stat-snr.pdf'
         snr = compute_snr(imgs, mask, output_file=output_file)
 
-        bad_runs = check_motion_filtering(confounds, frame_threshold=self.frame_threshold)
+        filtered_motion = check_motion_filtering(imgs, events, confounds,
+                                                 frame_threshold=self.frame_threshold)
+        imgs, events, confounds, bad_runs = filtered_motion
         print(f'{bad_runs=}')
 
         # Shift the time series because fMRIPrep slice time corrects to the middle volume
@@ -204,9 +213,9 @@ def main():
     parser = argparse.ArgumentParser(description='Run a standard first-level GLM on the localizer tasks')
     parser.add_argument('--dataset_path', '-d', type=str,
                         default='/mindhive/nklab3/users/emaliem/sts_communication')
-    parser.add_argument('--subject_label', '-s', type=int, default=1,
+    parser.add_argument('--subject_label', '-s', type=int, default=3,
                          help='Subject for the GLM')
-    parser.add_argument('--task_label', '-t', type=str, default='communicate',
+    parser.add_argument('--task_label', '-t', type=str, default='pointlight',
                          help='Task to run the GLM on')
     parser.add_argument('--space_label', type=str, default='MNI152NLin2009cAsym',
                          help='Space of the GLM')

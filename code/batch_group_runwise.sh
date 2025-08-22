@@ -2,7 +2,7 @@
 
 #SBATCH
 #SBATCH --job-name=group_runwise_results
-#SBATCH --time=3020:00
+#SBATCH --time=20:00
 #SBATCH --mem-per-cpu=4GB
 #SBATCH --cpus-per-task=2
 #SBATCH --exclude=node064
