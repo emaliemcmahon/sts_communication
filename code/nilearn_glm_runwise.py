@@ -1,9 +1,10 @@
 import os
-import shutil
+import warnings
 import argparse
 from glob import glob
 from pathlib import Path
 from nilearn.glm.first_level import first_level_from_bids as flfb
+from nilearn.interfaces.fmriprep import load_confounds
 import nibabel as nib
 from tqdm import tqdm
 from nilearn.masking import intersect_masks
@@ -12,20 +13,28 @@ import numpy as np
 import matplotlib.pyplot as plt
 from itertools import product
 
-response_contrasts = ['com_phy', 'com_ind', 'phy', 'ind',
+
+n_groups = {'pointlight': 4, 'tom': 2, 'communicate': 9}
+
+response_contrasts = {'pointlight': ['interact', 'noninteract'],
+                      'tom': ['belief', 'photo'],
+                      'communicate': ['com_phy', 'com_ind', 'phy', 'ind',
                     'face_third', 'face_first', 'face_noncom',
-                    'body', 'object']
+                    'body', 'object']}
 
-froi_contrasts = {'body-object': ['EBA'],
-                  '0.5*face_third+0.5*face_noncom-object': ['fSTS', 'FFA'],
-                  'com_phy-phy': ['comphy-STS'],
-                   'com_ind-ind': ['comind-STS']}
+froi_contrasts = {'pointlight': {'interact-noninteract': ['SI-STS']}, 
+                'tom': {'belief-photo': ['TPJ']},
+                  'communicate': {'body-object': ['EBA'],
+                                  '0.5*face_third+0.5*face_noncom-object': ['fSTS', 'FFA'],
+                                  'com_phy-phy': ['comphy-STS'],
+                                  'com_ind-ind': ['comind-STS']}}
 
-roi_size = {'comphy-STS': .05, 'comind-STS': .05,
-            'EBA': .1, 'fSTS': .1, 'FFA': .1}
+roi_size = {'comphy-STS': .05, 'comind-STS': .05, 'TPJ': .1,
+            'EBA': .1, 'fSTS': .1, 'FFA': .1, 'SI-STS': .05}
 
 roi_parc = {'comphy-STS': 'anatSTS',
-            'comind-STS': 'anatSTS'}
+            'comind-STS': 'anatSTS',
+            'SI-STS': 'anatSTS'}
 
 
 def roi_switcher(roi):
@@ -40,16 +49,47 @@ def info2vars(model_info):
     return models[0], imgs[0], events[0], confounds[0]
 
 
-def check_motion_filtering(confounds, frame_threshold=5):
-    n_excluded_runs = 0
-    included_runs = []
-    for irun, confound in enumerate(confounds):
-        if confound['rot_x'].isna().sum() > frame_threshold: 
-            n_excluded_runs += 1
-        else:
-            included_runs.append(irun)
-    return n_excluded_runs, included_runs
+def check_motion_filtering(sample_masks, n_trs, threshold=12, one_indexed=False):
+    """
+    Return a list of runs where more than `threshold` frames were removed.
 
+    Parameters
+    ----------
+    sample_masks : array-like or list of array-like
+        Each element is a numpy array of kept-volume indices (from load_confounds).
+        If a single run, can pass a single array directly.
+    n_trs : int or list of int
+        Total number of volumes (TRs) in each corresponding run.
+    threshold : int, default=12
+        Number of removed frames above which a run is considered exceeding.
+    one_indexed : bool, default=True
+        If True, return runs numbered from 1 (run 1, 2, ...). 
+        If False, return 0-indexed run indices.
+
+    Returns
+    -------
+    list of int
+        Runs that exceed the threshold for removed frames.
+    """
+    import numpy as np
+
+    # Normalize to lists
+    if not isinstance(sample_masks, (list, tuple)):
+        sample_masks = [sample_masks]
+    if not isinstance(n_trs, (list, tuple, np.ndarray)):
+        n_trs = [n_trs] * len(sample_masks)
+
+    bad_runs = []
+    good_runs = []
+    for i, (mask, total) in enumerate(zip(sample_masks, n_trs)):
+        n_kept = len(mask) if mask is not None else total
+        n_removed = total - n_kept
+        if n_removed > threshold:
+            bad_runs.append(i + 1 if one_indexed else i)
+        else:
+            good_runs.append(i + 1 if one_indexed else i)   
+
+    return bad_runs, good_runs
 
 def split_into_groups(items, n_groups=3):
     return [items[i::n_groups] for i in range(n_groups)]
@@ -204,7 +244,6 @@ class NilearnGLMRunwise:
         self.subject_label = args.subject_label
         self.dataset_path = args.dataset_path
         self.overwrite = args.overwrite
-        self.n_groups = args.n_groups
         self.derivatives_path = f'{self.dataset_path}/derivatives'
         self.fmriprep_path = f'{self.derivatives_path}/fmriprep'
         self.parcel_path = f'{self.derivatives_path}/parcels-{self.space_label}'
@@ -214,36 +253,53 @@ class NilearnGLMRunwise:
         print(vars(self))
 
     def load_mask(self):
-        mask_files = sorted(glob(f'{self.fmriprep_path}/sub-{self.subject_label}/ses-01/func/*{self.task_label}*{self.space_label}*brain_mask.nii.gz'))
+        mask_files = sorted(glob(f'{self.fmriprep_path}/sub-{self.subject_label}/ses-01/func/*task-{self.task_label}*{self.space_label}*brain_mask.nii.gz'))
+        print(mask_files)
         masks = [nib.load(mask_file) for mask_file in mask_files]
         return intersect_masks(masks)
 
     def glm(self):
         mask = self.load_mask()
-        model_info = flfb(self.dataset_path,
-                          self.task_label,
-                          self.space_label,
-                          mask_img=mask,
-                          sub_labels=[self.subject_label],
-                          slice_time_ref=None, # Load from the BIDS data
-                          smoothing_fwhm=5.0,
-                          img_filters=[("desc", "preproc")],
-                          confounds_strategy=('motion', 'scrub'),
-                          confounds_motion='basic',
-                          derivatives_folder=self.fmriprep_path,
-                          minimize_memory=False, 
-                          hrf_model='spm',
-                          confounds_fd_threshold=0.5, #FD in mm
-                          confounds_scrub=5, #remove segments shorter than the given number after scrubbing
-                          confounds_std_dvars_threshold=1.5,
-                          n_jobs=-1)
-        
-        # Print info to ensure correct loading
-        model, imgs, events, confounds = info2vars(model_info)
 
-        n_excluded_runs, included_runs = check_motion_filtering(confounds,
-                                                                frame_threshold=self.frame_threshold)
-        print(f'{n_excluded_runs=}')
+        files = sorted(glob(f'{self.fmriprep_path}/sub-{self.subject_label}/ses-*/func/*{self.task_label}*{self.space_label}*bold.nii.gz'))
+        print(files)
+        
+        # Load confounds with motion filtering strategy to get sample_masks
+        with warnings.catch_warnings():
+            warnings.filterwarnings('ignore', category=DeprecationWarning)
+            confounds_filtered, sample_masks = load_confounds(files, strategy=('motion', 'scrub'), 
+                                                        fd_threshold=1, 
+                                                        std_dvars_threshold=3, 
+                                                        scrub=0,
+                                                        motion='basic')
+
+        # Check which runs exceed motion threshold
+        n_trs = nib.load(files[0]).shape[-1]
+        excluded_runs, included_runs = check_motion_filtering(sample_masks, n_trs,
+                                                                threshold=self.frame_threshold)
+        print(f'{len(excluded_runs)=}')
+        print(f'{len(included_runs)=}')
+        for i, m in enumerate(sample_masks):
+            if m is not None:
+                print(f'Run {i}: {len(m)=}/{n_trs=}')
+
+        # Load model with first_level_from_bids but use our filtered confounds
+        model_info = flfb(self.dataset_path,
+                            self.task_label,
+                            self.space_label,
+                            mask_img=mask,
+                            sub_labels=[self.subject_label],
+                            slice_time_ref=None, # Load from the BIDS data
+                            smoothing_fwhm=5.0,
+                            img_filters=[("desc", "preproc")],
+                            derivatives_folder=self.fmriprep_path,
+                            minimize_memory=False, 
+                            hrf_model='spm',
+                            n_jobs=-1)
+        
+        # Get model, imgs, and events from BIDS, but use our confounds_filtered
+        model, imgs, events, _ = info2vars(model_info)
+        confounds = confounds_filtered
 
         # Shift the time series because fMRIPrep slice time corrects to the middle volume
         # https://reproducibility.stanford.edu/slice-timing-correction-in-fmriprep-and-linear-modeling/
@@ -252,21 +308,21 @@ class NilearnGLMRunwise:
             event['onset'] = event['onset'] + 1
             events_shifted.append(event)
 
-        run_groups = split_into_groups(included_runs, n_groups=self.n_groups)
+        run_groups = split_into_groups(included_runs, n_groups=n_groups[self.task_label])
         for igroup, runs in tqdm(enumerate(run_groups),
-                                 total=self.n_groups, desc='fitting run groups'):
+                                 total=n_groups[self.task_label], desc='fitting run groups'):
             # Compute the model and contrasts to define the fROIs
             model.fit([imgs[r] for r in included_runs if r not in runs], 
                                 [events_shifted[r] for r in included_runs if r not in runs],
                                 [confounds[r] for r in included_runs if r not in runs])
-            for contrast in froi_contrasts.keys():
+            for contrast in froi_contrasts[self.task_label].keys():
                 contrast_name = hyphen_to_camel_case(contrast)
                 title = f'sub-{self.subject_label}_task-{self.task_label}_contrast-{contrast_name}_run-{igroup+1}'
                 contrast_file = f'{self.out_path}/sub-{self.subject_label}/{title}.nii.gz'            
                 stat_map = model.compute_contrast(contrast, output_type='z_score')
                 nib.save(stat_map, contrast_file)
 
-                for hemi, roi in product(['l', 'r'], froi_contrasts[contrast]):
+                for hemi, roi in product(['l', 'r'], froi_contrasts[self.task_label][contrast]):
                     output_file = f'{self.out_path}/sub-{self.subject_label}/sub-{self.subject_label}_run-{igroup+1}_{hemi}{roi}'      
                     mask_file = f'{self.parcel_path}/{hemi}{roi_switcher(roi)}.nii.gz'
                     new_mask = selective_mask_img(mask_file, contrast_file, 
@@ -278,7 +334,7 @@ class NilearnGLMRunwise:
             model.fit([imgs[r] for r in included_runs if r in runs], 
                       [events_shifted[r] for r in included_runs if r in runs],
                       [confounds[r] for r in included_runs if r in runs])
-            for contrast in response_contrasts:
+            for contrast in response_contrasts[self.task_label]:
                 title = f'sub-{self.subject_label}_task-{self.task_label}_contrast-{contrast}_run-{igroup+1}'
                 contrast_file = f'{self.out_path}/sub-{self.subject_label}/{title}.nii.gz' 
                 stat_map = model.compute_contrast(contrast, output_type='effect_size')
@@ -290,25 +346,21 @@ class NilearnGLMRunwise:
             self.glm()
         else:
             if self.overwrite:
-                shutil.rmtree(f'{self.out_path}/sub-{self.subject_label}')
                 Path(f'{self.out_path}/sub-{self.subject_label}').mkdir(parents=True, exist_ok=True)
                 self.glm()
             else:
                 print('Output already exists. To re-run pass --overwrite')
 
-
 def main():
     parser = argparse.ArgumentParser(description='Run a standard first-level GLM on the localizer tasks')
     parser.add_argument('--dataset_path', '-d', type=str,
-                        default='/mindhive/nklab3/users/emaliem/sts_communication')
+                        default='/orcd/data/ngk/001/users/emaliem/sts_communication')
     parser.add_argument('--subject_label', '-s', type=str, default='02',
                          help='Subject for the GLM')
-    parser.add_argument('--task_label', '-t', type=str, default='communicate',
+    parser.add_argument('--task_label', '-t', type=str, default='pointlight',
                          help='Task to run the GLM on')
     parser.add_argument('--space_label', type=str, default='MNI152NLin2009cAsym',
                          help='Space of the GLM')
-    parser.add_argument('--n_groups', '-n', type=int, default=9,
-                         help='Number of runs to load')
     parser.add_argument('--overwrite', action=argparse.BooleanOptionalAction, default=True)
     args = parser.parse_args()
 

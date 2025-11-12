@@ -17,8 +17,8 @@ contrasts = [('face-first', 'face-noncom'),
              ('face-third', 'face-noncom'),
              ('com-ind', 'ind'),
              ('com-joint', 'joint'), 
-             ('face-noncom', 'body'),
-             ('com', 'ind')]
+             ('face-noncom', 'body'), 
+             ('joint', 'com-ind')]
 
 summary_contrasts = [('face-first', 'face-noncom'),
              ('face-third', 'face-noncom'),
@@ -27,7 +27,8 @@ summary_contrasts = [('face-first', 'face-noncom'),
 
 focused_contrasts = [('face-first', 'face-noncom'),
                      ('face-third', 'face-noncom'),
-                     ('com', 'ind')]
+                     ('com-ind', 'ind'),
+                     ('com-joint', 'joint')]
 
 condition_rename = {'com_phy': 'com-joint', 'phy': 'joint',
                     'com_ind': 'com-ind',
@@ -160,17 +161,20 @@ class GroupRunwiseResults:
                 "#673AB7",  # Rich muted violet (Dark Purple 1)
                 "#B39DDB",  # Pale lilac (Light Purple 2)
                 '#FFFFFF',
+                "#673AB7",  # Rich muted violet (Dark Purple 1)
+                "#B39DDB",  # Pale lilac (Light Purple 2)
+                '#FFFFFF',
                 "#3949AB",  # Deep muted navy (Dark Blue 1)
                 "#5C6BC0",  # Dusty periwinkle (Dark Blue 2)
                 "#90CAF9",  # Pale sky blue (Light Blue)
             ]
         conditions = [
-                      'com', 'ind', 'hold2', 
+                      'com-ind', 'ind', 'hold1', 
+                      'com-joint', 'joint', 'hold2',
                       'face-first', 'face-third', 'face-noncom',
                       ]
         
-        df = df.loc[~df.trial_type.isin(['object', 'body',
-                                         'com-ind', 'joint', 'com-joint'])].reset_index(drop=True)
+        df = df.loc[~df.trial_type.isin(['object', 'body'])].reset_index(drop=True)
         
         df_holder = df.iloc[-1]
         empty_df = [df]
@@ -194,16 +198,16 @@ class GroupRunwiseResults:
 
         for iroi, roi in enumerate(rois):
             fig, ax = plt.subplots(1, 1,
-                                 figsize=(12, 5))
+                                 figsize=(15, 4))
             sns.barplot(x='trial_type', y='response',
                         hue='trial_type', legend=False,
                         ax=ax, data=df.loc[roi], 
                         palette=palette, errorbar='se',
-                        dodge=False)
-            fig.savefig(f'{self.out_path}/roi-{roi}_hemi-{hemi}h.pdf')
+                        dodge=False, width=0.5)
             error_max = [line.get_ydata()[1] for line in ax.lines]
             error_max = [error_max[0], error_max[1], 0,
-                         error_max[2], error_max[3], error_max[4]]
+                         error_max[2], error_max[3], 0, 
+                         error_max[4], error_max[5], error_max[6]]
 
             face_pos = None
             stats_pos = []
@@ -235,21 +239,19 @@ class GroupRunwiseResults:
                     stats_pos.append(y_pos)
             
             ax.set_xticks(range(len(conditions)))
-            ax.set_xticklabels(['communicating', 'independent',' ',
-                                'to screen', 'off screen', 'self-directed'], 
-                                fontsize=16)
+            ax.set_xticklabels(['communicative', 'independent',' ',
+                                'communicative', 'social not\ncommunicative',' ',
+                                'talking\nto viewer', 'talking off\nscreen', 'self-directed\naction'], 
+                                ha='center', fontsize=13)
             if stats_pos:
-                ax.set_ylim([-.1, max(stats_pos)+(max(error_max)*0.1)])
+                ax.set_ylim([0, max(stats_pos)+(max(error_max)*0.1)])
             else:
-                ax.set_ylim([-.1, ax.get_ylim()[-1]])
+                ax.set_ylim([0, ax.get_ylim()[-1]])
 
             ax.spines['right'].set_visible(False)
             ax.spines['top'].set_visible(False)
             ax.set_xlabel('')
-            if iroi == 0: 
-                ax.set_ylabel(r'$\beta$ values')
-            else:
-                ax.set_ylabel('')
+            ax.set_ylabel(r'$\beta$ values')
             fig.tight_layout()
             fig.savefig(f'{self.out_path}/roi-{roi}_hemi-{hemi}h.pdf')
 
@@ -258,9 +260,6 @@ class GroupRunwiseResults:
         for sub in tqdm(self.subjs, desc='Loading subject data'):
             file = f'{self.individual_path}/{sub}/roi_response.csv'
             sub_df = pd.read_csv(file)
-            com_df = sub_df.loc[sub_df.trial_type.isin(['com_join', 'com_ind'])].groupby(['roi', 'hemi', 'run']).mean(numeric_only=True).reset_index()
-            com_df['trial_type'] = 'com'
-            sub_df = pd.concat([sub_df, com_df], ignore_index=True)
             sub_df['subject_label'] = sub
             df.append(sub_df)
         return pd.concat(df, ignore_index=True).reset_index(drop=True)
@@ -313,7 +312,7 @@ def main():
     parser.add_argument('sub_nums', nargs='*', type=int, help='List of elements', 
                         default=[1,2,3,4,5,7,8,9,11,12,13,14,15,16])
     parser.add_argument('--dataset_path', '-d', type=str,
-                        default='/mindhive/nklab3/users/emaliem/sts_communication')
+                        default='/orcd/data/ngk/001/users/emaliem/sts_communication')
     parser.add_argument('--overwrite', action=argparse.BooleanOptionalAction, default=False)
     args = parser.parse_args()
     GroupRunwiseResults(args).run()

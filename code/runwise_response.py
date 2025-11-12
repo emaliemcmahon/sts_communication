@@ -13,12 +13,16 @@ from nilearn.plotting import plot_glass_brain, view_img_on_surf
 from itertools import combinations
 
 
+n_runs = {'pointlight': 4, 'tom': 2, 'communicate': 9}
+
+
 roi_size = {'EVC': 0.05, 'MT': 0.1,
             'com-indSTS': .05,
             'com-phySTS': 0.05,
             'face-comSTS': 0.05,
             'FFA': .1, 'fSTS': .1, 
-            'EBA': .1}
+            'EBA': .1, 'SI-STS': .05,
+            'TPJ': .1}
 
 
 roi_parc = {'dyad-comSTS': 'anatSTS',
@@ -106,11 +110,9 @@ def remove_overlapping_values(original_dict, regions_to_filter):
 class RunwiseResponse:
     def __init__(self, args):
         self.process = 'RunwiseResponse'
-        self.task_label = 'communicate'
         self.space_label = args.space_label
         self.subject_label = str(args.subject_label).zfill(2)
         self.dataset_path = args.dataset_path
-        self.n_runs = args.n_runs
         self.derivatives_path = f'{self.dataset_path}/derivatives'
         self.out_path = f'{self.derivatives_path}/{self.process}/sub-{self.subject_label}'
         self.out_file = f'{self.out_path}/roi_response.csv'
@@ -121,10 +123,13 @@ class RunwiseResponse:
         self.nifti_path = f'{self.dataset_path}/sub-{self.subject_label}/*/func'
         self.conditions = ['object', 'body', 
                            'face_first', 'face_third', 'face_noncom',
-                           'com_phy', 'phy', 'com_ind', 'ind']
+                           'com_phy', 'phy', 'com_ind', 'ind', 'interact',
+                           'noninteract', 'belief', 'photo']
         self.plotting_conditions = ['object', 'body',
                                     'face_first', 'face_third', 'face_noncom',
-                                    'com_phy', 'phy', 'com_ind', 'ind']
+                                    'com_phy', 'phy', 'com_ind', 'ind',
+                                    'interact', 'noninteract',
+                                    'belief', 'photo']
         self.hemis = ['l', 'r']
         self.rois = ['EVC', 'MT', 'FFA', 'EBA', 'fSTS',
                      'SI-STS', 'TPJ']
@@ -150,6 +155,10 @@ class RunwiseResponse:
             out = response_dict['com_phy'] - response_dict['phy']
         elif roi == 'EBA':
             out = response_dict['body'] - response_dict['object']
+        elif roi == 'SI-STS':
+            out = response_dict['interact'] - response_dict['noninteract']
+        elif roi == 'TPJ':
+            out = response_dict['belief'] - response_dict['photo']
         return out.flatten()
     
     def define_roi(self, img_arr, run, hemi, roi):
@@ -171,13 +180,15 @@ class RunwiseResponse:
     def load_responses(self):
         response_dict = []
         affine = None
-        for run in range(self.n_runs):
-            response_dict.append(dict())
-            for condition in self.conditions:
-                img_file = f'{self.glm_path}/sub-{self.subject_label}_task-{self.task_label}_contrast-{condition}_run-{run+1}.nii.gz'
-                response_dict[-1][condition] = nib.load(img_file).get_fdata()
-                if affine is None:
-                    affine = nib.load(img_file).affine
+        for task in n_runs.keys():
+            for run in range(n_runs[task]):
+                response_dict.append(dict())
+                for condition in self.conditions:
+                    img_file = f'{self.glm_path}/sub-{self.subject_label}_task-{task}_contrast-{condition}_run-{run+1}.nii.gz'
+                    if os.path.exists(img_file):
+                        response_dict[-1][condition] = nib.load(img_file).get_fdata()
+                        if affine is None:
+                            affine = nib.load(img_file).affine
         return response_dict, affine
     
     def visualize_rois(self, out, out_name):
@@ -189,55 +200,56 @@ class RunwiseResponse:
 
     def get_roi_response(self, responses, affine=np.eye(4)):
         out = []
-        iterator = tqdm(range(self.n_runs),
-                        total=self.n_runs, leave=True,
-                        desc='getting runwise response in the ROIs')
         overlap_df = []
         roi_images = dict()
-        for run in iterator:
-            # Make the data frame for defining ROIs
-            roi_def_response = [resp for i, resp in enumerate(responses) if i not in ([run] if isinstance(run, int) else run)]
-            roi_def_response = list_of_dict_mean(roi_def_response) #compute the mean across runs
-            
-            for hemi in self.hemis:
-                overlap_dict = {}
-                for roi in self.rois:
-                    if roi not in self.loc_rois: 
-                        contrast = self.get_contrast(roi_def_response, roi)
-                        roi_indices = self.define_roi(contrast, run=run, roi=roi, hemi=hemi)
-                    else:
-                        # If the ROI is defined from other data, load the mask
-                        roi_mask = nib.load(f'{self.froi_path}/sub-{self.subject_label}_{hemi}{roi}.nii.gz')
-                        roi_indices = np.where(roi_mask.get_fdata().astype(bool).flatten())[0]
-                    overlap_dict[roi] = roi_indices
-            
-                # Save overlap
-                df = count_overlaps(overlap_dict)
-                df['hemi'], df['run'] = hemi, run
-                overlap_df.append(df)
+        
+        run_idx = 0
+        for task in n_runs.keys():
+            iterator = tqdm(range(n_runs[task]),
+                            total=n_runs[task], leave=True,
+                            desc=f'getting runwise response in the ROIs for {task}')
+            for run in iterator:
+                # Make the data frame for defining ROIs
+                roi_def_response = [resp for i, resp in enumerate(responses) if i != run_idx]
+                roi_def_response = list_of_dict_mean(roi_def_response) #compute the mean across runs
+                
+                for hemi in self.hemis:
+                    overlap_dict = {}
+                    for roi in self.rois:
+                        if roi not in self.loc_rois: 
+                            contrast = self.get_contrast(roi_def_response, roi)
+                            roi_indices = self.define_roi(contrast, run=run, roi=roi, hemi=hemi)
+                        else:
+                            # If the ROI is defined from other data, load the mask
+                            roi_mask = nib.load(f'{self.froi_path}/sub-{self.subject_label}_{hemi}{roi}.nii.gz')
+                            roi_indices = np.where(roi_mask.get_fdata().astype(bool).flatten())[0]
+                        overlap_dict[roi] = roi_indices
+                
+                    # Save overlap
+                    df = count_overlaps(overlap_dict)
+                    df['hemi'], df['run'], df['task'] = hemi, run, task
+                    overlap_df.append(df)
 
-                filtered_roi_indices = remove_overlapping_values(overlap_dict, self.overlap_rois)
-                for roi in self.rois: 
-                    # Estimate the response in the ROI
-                    roi_response = [responses[i] for i in ([run] if isinstance(run, int) else run)]
-                    if len(roi_response) > 1:
-                        roi_response = list_of_dict_mean(roi_response)
-                    else:
-                        roi_response = roi_response[0]
+                    filtered_roi_indices = remove_overlapping_values(overlap_dict, self.overlap_rois)
+                    for roi in self.rois: 
+                        # Estimate the response in the ROI
+                        roi_response = responses[run_idx]
 
-                    for condition, response in roi_response.items():
-                        out.append({'roi': roi, 'hemi': hemi,
-                                    'run': run, 'trial_type': condition,
-                                    'response': response.flatten()[filtered_roi_indices[roi]].mean()})
-                        
-                    # Add ROI image to the array by adding a True value to an existing array or creating new boolean array
-                    roi_array = np.zeros_like(response.flatten(), dtype='bool')
-                    roi_array[filtered_roi_indices[roi]] = True
-                    roi_array = roi_array.reshape(response.shape)
-                    if f'{hemi}{roi}' not in roi_images.keys():
-                        roi_images[f'{hemi}{roi}'] = roi_array
-                    else: 
-                        roi_images[f'{hemi}{roi}'] += roi_array
+                        for condition, response in roi_response.items():
+                            out.append({'roi': roi, 'hemi': hemi,
+                                        'run': run, 'task': task, 'trial_type': condition,
+                                        'response': response.flatten()[filtered_roi_indices[roi]].mean()})
+                            
+                        # Add ROI image to the array by adding a True value to an existing array or creating new boolean array
+                        roi_array = np.zeros_like(response.flatten(), dtype='bool')
+                        roi_array[filtered_roi_indices[roi]] = True
+                        roi_array = roi_array.reshape(response.shape)
+                        if f'{hemi}{roi}' not in roi_images.keys():
+                            roi_images[f'{hemi}{roi}'] = roi_array
+                        else: 
+                            roi_images[f'{hemi}{roi}'] += roi_array
+                
+                run_idx += 1
 
         # Save the ROIs images. The images contain True if that voxel is present in any of the contrasts across runs
         for hemi in self.hemis:
@@ -248,7 +260,7 @@ class RunwiseResponse:
                  self.visualize_rois(roi_image, f'{self.out_path}/{hemi}{roi}')
         
         #Get the average overlap across runs
-        overlap_df = pd.concat(overlap_df).groupby(['roi1', 'roi2', 'hemi']).mean().reset_index()
+        overlap_df = pd.concat(overlap_df).groupby(['roi1', 'roi2', 'hemi', 'task']).mean().reset_index()
         return pd.DataFrame(out), overlap_df
 
     def plot_rois(self, roi_response):
@@ -263,6 +275,10 @@ class RunwiseResponse:
                     "#9575CD",  # Soft lavender (Light Purple 1)
                     "#7E57C2",  # Dusty plum (Dark Purple 2)
                     "#B39DDB",  # Pale lilac (Light Purple 2)
+                    "#26A69A",  # Dark teal (interact_pointlight)
+                    "#80CBC4",  # Light teal (noninteract_pointlight)
+                    "#FF9800",  # Dark amber (belief)
+                    "#FFCC80",  # Light amber (photo)
                 ]
 
         fig, axes = plt.subplots(len(self.rois), 2,
@@ -310,8 +326,6 @@ def main():
                         default='/mindhive/nklab3/users/emaliem/sts_communication')
     parser.add_argument('--subject_label', '-s', type=int, default=1,
                          help='Subject for the GLM')
-    parser.add_argument('--n_runs', '-n', type=int, default=9,
-                         help='Number of runs to load')
     parser.add_argument('--space_label', type=str, default='MNI152NLin2009cAsym',
                          help='Space of the GLM')
     args = parser.parse_args()

@@ -1,6 +1,8 @@
 user=$(shell whoami)
-project_path=/mindhive/nklab3/users/$(user)/sts_communication
+project_path=/orcd/data/ngk/001/users/$(user)/sts_communication
 subs := 01 02 03 04 05 07 08 09 11 12 13 14 15 16
+tom_subs := 01 03 04 05 07 08 09 11 12 13 14 15 16
+
 
 # Steps to run
 all: preprocess rois first_level_runwise random_effects group_runwise
@@ -12,25 +14,14 @@ preprocess:
 		sbatch $(project_path)/code/batch_preproc.sh "$$s"; \
 	done
 
-# Run the first level analysis for localizer tasks
-tom_subs := 01 03 04 05 07 08 09 11 12 13 14 15 16
-eploc_subs := 02
-rois: 
-	for s in $(subs); do \
-		sbatch $(project_path)/code/batch_frois.sh "$$s" pointlight; \
-		sbatch $(project_path)/code/batch_frois.sh "$$s" communicate; \
-	done
-	for s in $(tom_subs); do \
-		sbatch $(project_path)/code/batch_frois.sh "$$s" tom; \
-	done
-	for s in $(eploc_subs); do \
-		sbatch $(project_path)/code/batch_frois.sh "$$s" eploc; \
-	done
-
 # Define the runwise ROIs and responses
 first_level_runwise: 
 	for s in $(subs); do \
-		sbatch $(project_path)/code/batch_runwise_glm.sh "$$s"; \
+		sbatch $(project_path)/code/batch_runwise_glm.sh "$$s" pointlight; \
+		sbatch $(project_path)/code/batch_runwise_glm.sh "$$s" communicate; \
+	done
+	for s in $(tom_subs); do \
+		sbatch $(project_path)/code/batch_runwise_glm.sh "$$s" tom; \
 	done
 
 # Define contrast arrays (space-separated lists in Make)
