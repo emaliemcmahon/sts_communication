@@ -34,11 +34,14 @@ froi_contrasts = {'pointlight': {'interact-noninteract': ['SI-STS']},
 
 roi_size = {'comphy-STS': .05, 'comind-STS': .05, 'TPJ': .1,
             'EBA': .1, 'fSTS': .1, 'FFA': .1, 'SI-STS': .05, ''
-            'EVC': 0.05, 'MT': 0.1, 'dyadcom-STS': .05, 'facecom-STS': .05}
+            'EVC': 0.05, 'MT': 0.1, 
+            'dyadcom-STS': .05, 'facecom-STS': .05}
 
 roi_parc = {'comphy-STS': 'anatSTS',
             'comind-STS': 'anatSTS',
-            'SI-STS': 'anatSTS'}
+            'SI-STS': 'anatSTS', 
+            'dyadcom-STS': 'anatSTS',
+            'facecom-STS': 'anatSTS'}
 
 
 def roi_switcher(roi):
