@@ -5,7 +5,7 @@ tom_subs := 01 03 04 05 07 08 09 11 12 13 14 15 16
 
 
 # Steps to run
-all: preprocess rois first_level_runwise random_effects group_runwise
+all: preprocess rois first_level_runwise runwise_response group_runwise random_effects
 
 # Preprocess fMRI data with fRMIPrep
 preprocess:
@@ -24,6 +24,14 @@ first_level_runwise:
 		sbatch $(project_path)/code/batch_runwise_glm.sh "$$s" tom; \
 	done
 
+runwise_response:
+	for s in $(subs); do \
+		sbatch $(project_path)/code/subject_runwise_response.sh "$$s"; \
+	done
+
+group_runwise:
+	sbatch $(project_path)/code/batch_group_runwise.sh
+
 # Define contrast arrays (space-separated lists in Make)
 C1S := com_phy com_ind face_first face_first face_third 0.5*face_third+0.5*face_first 0.5*com_phy+0.5*com_ind 0.5*face_third+0.5*face_noncom body phy 0.33*phy+0.33*com_phy+0.33*com_ind
 C2S := phy ind face_noncom face_third face_noncom face_noncom 0.5*phy+0.5*ind object object ind ind
@@ -37,5 +45,4 @@ random_effects:
 		sbatch $(project_path)/code/batch_random_effects.sh $(C1) $(C2); \
 	)
 
-group_runwise:
-	sbatch $(project_path)/code/batch_group_runwise.sh
+

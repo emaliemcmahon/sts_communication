@@ -17,18 +17,29 @@ n_runs = {'pointlight': 4, 'tom': 2, 'communicate': 9}
 
 
 roi_size = {'EVC': 0.05, 'MT': 0.1,
-            'com-indSTS': .05,
-            'com-phySTS': 0.05,
-            'face-comSTS': 0.05,
+            'comind-STS': .05,
+            'comphy-STS': 0.05,
+            'facecom-STS': 0.05,
             'FFA': .1, 'fSTS': .1, 
             'EBA': .1, 'SI-STS': .05,
             'TPJ': .1}
 
+task_rois = {'communicate': ['EVC', 'MT', 'FFA', 'EBA', 'fSTS',
+                             'comindSTS', 'comphySTS', 'facecomSTS'],
+             'pointlight': ['SI-STS'],
+             'tom': ['TPJ']}
+
+task_conditions = {'communicate': ['object', 'body', 
+                                   'face_first', 'face_third', 'face_noncom',
+                                   'com_phy', 'phy', 'com_ind', 'ind'],
+                   'pointlight': ['interact', 'noninteract'],
+                   'tom': ['belief', 'photo']}
 
 roi_parc = {'dyad-comSTS': 'anatSTS',
-            'com-indSTS': 'anatSTS',
-            'com-phySTS': 'anatSTS',
-            'face-comSTS': 'anatSTS'}
+            'comind-STS': 'anatSTS',
+            'comphy-STS': 'anatSTS',
+            'facecom-STS': 'anatSTS',
+            'SI-STS': 'anatSTS'}
 
 
 def roi_switcher(roi):
@@ -130,66 +141,22 @@ class RunwiseResponse:
                                     'com_phy', 'phy', 'com_ind', 'ind',
                                     'interact', 'noninteract',
                                     'belief', 'photo']
+        self.tasks = list(n_runs.keys())
         self.hemis = ['l', 'r']
-        self.rois = ['EVC', 'MT', 'FFA', 'EBA', 'fSTS',
-                     'SI-STS', 'TPJ']
-                    #  'face-comSTS',  'com-indSTS', 'com-phySTS',
-        self.overlap_rois = ['EVC', 'FFA', 'EBA', 'MT', 'TPJ']
-        self.loc_rois = ['SI-STS', 'TPJ']
+        self.rois = roi_size.keys()
         Path(self.out_path).mkdir(parents=True, exist_ok=True)
     
-    def get_contrast(self, response_dict, roi):
-        if roi in ['MT', 'EVC']:
-            out = np.mean([response_dict[cond] for cond in ['object', 'phy']], axis=0)
-        elif roi in ['FFA', 'fSTS']:
-            a = np.mean([response_dict[cond] for cond in ['face_first', 'face_noncom']], axis=0)
-            b = response_dict['object']
-            out = a - b
-        elif roi == 'face-comSTS':
-            a = np.mean([response_dict[cond] for cond in ['face_first', 'face_third']], axis=0)
-            b = response_dict['face_noncom']
-            out = a - b
-        elif roi == 'com-indSTS':
-            out = response_dict['com_ind'] - response_dict['ind']
-        elif roi == 'com-phySTS':
-            out = response_dict['com_phy'] - response_dict['phy']
-        elif roi == 'EBA':
-            out = response_dict['body'] - response_dict['object']
-        elif roi == 'SI-STS':
-            out = response_dict['interact'] - response_dict['noninteract']
-        elif roi == 'TPJ':
-            out = response_dict['belief'] - response_dict['photo']
-        return out.flatten()
-    
-    def define_roi(self, img_arr, run, hemi, roi):
-        # Get mask
-        mask = nib.load(f'{self.parcel_path}/{hemi}{roi_switcher(roi)}.nii.gz')
-        mask_arr = mask.get_fdata().flatten()
-        anti_mask = np.invert(mask_arr.astype(bool))
-        n_voxels_to_keep = int(mask_arr.sum() * roi_size[roi])
-
-        # Get the indices of the highest response
-        roi_response = np.nan_to_num(img_arr, -1000.)
-        roi_response[anti_mask] = -1000.
-        voxel_sorted_indices = np.argsort(roi_response) #sort smallest to largest
-        voxel_sorted_indices = voxel_sorted_indices[::-1] #sort largest to smallest
-        voxels_to_keep = voxel_sorted_indices[:n_voxels_to_keep]
-
-        return voxels_to_keep
-    
     def load_responses(self):
-        response_dict = []
-        affine = None
-        for task in n_runs.keys():
-            for run in range(n_runs[task]):
-                response_dict.append(dict())
-                for condition in self.conditions:
+        response_dict = dict()
+        for task in self.tasks:
+            for condition in task_conditions[task]:
+                response_dict[condition] = []
+                for run in range(n_runs[task]):
                     img_file = f'{self.glm_path}/sub-{self.subject_label}_task-{task}_contrast-{condition}_run-{run+1}.nii.gz'
                     if os.path.exists(img_file):
-                        response_dict[-1][condition] = nib.load(img_file).get_fdata()
-                        if affine is None:
-                            affine = nib.load(img_file).affine
-        return response_dict, affine
+                        img = nib.load(img_file)
+                        response_dict[condition].append(img.get_fdata())
+        return response_dict
     
     def visualize_rois(self, out, out_name):
         nib.save(out, f'{out_name}.nii.gz')
@@ -198,70 +165,95 @@ class RunwiseResponse:
         view.save_as_html(f'{out_name}.html')  
         plt.close()
 
-    def get_roi_response(self, responses, affine=np.eye(4)):
-        out = []
-        overlap_df = []
-        roi_images = dict()
+    def load_roi_mask(self, run, hemi, roi):
+        """Load ROI mask for a specific run and return voxel indices."""
+        roi_file = f'{self.glm_path}/sub-{self.subject_label}_run-{run+1}_{hemi}{roi}.nii.gz'
+        if not os.path.exists(roi_file):
+            print(f"Looking for ROI file: {roi_file}")
+            print(f"ROI file not found: {roi_file}")
+            return None
         
-        run_idx = 0
-        for task in n_runs.keys():
-            iterator = tqdm(range(n_runs[task]),
-                            total=n_runs[task], leave=True,
-                            desc=f'getting runwise response in the ROIs for {task}')
-            for run in iterator:
-                # Make the data frame for defining ROIs
-                roi_def_response = [resp for i, resp in enumerate(responses) if i != run_idx]
-                roi_def_response = list_of_dict_mean(roi_def_response) #compute the mean across runs
-                
-                for hemi in self.hemis:
-                    overlap_dict = {}
-                    for roi in self.rois:
-                        if roi not in self.loc_rois: 
-                            contrast = self.get_contrast(roi_def_response, roi)
-                            roi_indices = self.define_roi(contrast, run=run, roi=roi, hemi=hemi)
-                        else:
-                            # If the ROI is defined from other data, load the mask
-                            roi_mask = nib.load(f'{self.froi_path}/sub-{self.subject_label}_{hemi}{roi}.nii.gz')
-                            roi_indices = np.where(roi_mask.get_fdata().astype(bool).flatten())[0]
-                        overlap_dict[roi] = roi_indices
-                
-                    # Save overlap
-                    df = count_overlaps(overlap_dict)
-                    df['hemi'], df['run'], df['task'] = hemi, run, task
-                    overlap_df.append(df)
+        roi_mask = nib.load(roi_file).get_fdata().flatten()
+        voxels = np.where(roi_mask > 0)[0]
+        return voxels if len(voxels) > 0 else None
 
-                    filtered_roi_indices = remove_overlapping_values(overlap_dict, self.overlap_rois)
-                    for roi in self.rois: 
-                        # Estimate the response in the ROI
-                        roi_response = responses[run_idx]
+    def extract_response_for_condition(self, responses, condition, run, voxels):
+        """Extract mean response for a condition given voxels and run."""
+        if condition not in responses or len(responses[condition]) <= run:
+            return None
+        
+        cond_response = responses[condition][run]
+        return np.mean(cond_response.flatten()[voxels])
 
-                        for condition, response in roi_response.items():
-                            out.append({'roi': roi, 'hemi': hemi,
-                                        'run': run, 'task': task, 'trial_type': condition,
-                                        'response': response.flatten()[filtered_roi_indices[roi]].mean()})
-                            
-                        # Add ROI image to the array by adding a True value to an existing array or creating new boolean array
-                        roi_array = np.zeros_like(response.flatten(), dtype='bool')
-                        roi_array[filtered_roi_indices[roi]] = True
-                        roi_array = roi_array.reshape(response.shape)
-                        if f'{hemi}{roi}' not in roi_images.keys():
-                            roi_images[f'{hemi}{roi}'] = roi_array
-                        else: 
-                            roi_images[f'{hemi}{roi}'] += roi_array
-                
-                run_idx += 1
-
-        # Save the ROIs images. The images contain True if that voxel is present in any of the contrasts across runs
+    def process_roi_in_defining_task(self, responses, roi, task):
+        """Process ROI for the task where it's defined."""
+        task_responses = []
+        
         for hemi in self.hemis:
-            for roi in self.rois:
-                 roi_array = roi_images[f'{hemi}{roi}'].astype(float)
-                 roi_image = nib.Nifti1Image(roi_array,
-                                             affine=affine)
-                 self.visualize_rois(roi_image, f'{self.out_path}/{hemi}{roi}')
+            for run in range(n_runs[task]):
+                voxels = self.load_roi_mask(run, hemi, roi)
+                print(f"Loading ROI {roi}, run {run+1}, hemi {hemi}: {'Found' if voxels is not None else 'Not Found'}")
+                if voxels is None:
+                    continue
+                
+                for condition in task_conditions[task]:
+                    mean_response = self.extract_response_for_condition(responses, condition, run, voxels)
+                    if mean_response is not None:
+                        task_responses.append({
+                            'run': run,
+                            'task': task,
+                            'trial_type': condition,
+                            'response': mean_response,
+                            'roi': roi,
+                            'hemi': hemi
+                        })
         
-        #Get the average overlap across runs
-        overlap_df = pd.concat(overlap_df).groupby(['roi1', 'roi2', 'hemi', 'task']).mean().reset_index()
-        return pd.DataFrame(out), overlap_df
+        return task_responses
+
+    def process_roi_in_other_tasks(self, responses, roi, excluded_task):
+        """Process ROI for tasks where it's NOT defined (using other tasks' data)."""
+        other_responses = []
+        other_tasks = [t for t in self.tasks if t != excluded_task]
+        
+        for other_task in other_tasks:
+            for hemi in self.hemis:
+                for run in range(n_runs[other_task]):
+                    voxels = self.load_roi_mask(run, hemi, roi)
+                    print(f"Loading ROI {roi} for task {other_task}, run {run+1}, hemi {hemi}: {'Found' if voxels is not None else 'Not Found'}")
+                    if voxels is None:
+                        continue
+                    
+                    for condition in task_conditions[other_task]:
+                        mean_response = self.extract_response_for_condition(responses, condition, run, voxels)
+                        if mean_response is not None:
+                            other_responses.append({
+                                'run': run,
+                                'task': other_task,
+                                'trial_type': condition,
+                                'response': mean_response,
+                                'roi': roi,
+                                'hemi': hemi
+                            })
+        
+        return other_responses
+
+    def get_roi_response(self, responses):
+        """Extract responses for all ROIs across all tasks."""
+        out = []
+        
+        for roi in self.rois:
+            for task in self.tasks:
+                print(f"Processing Task: {task}")
+                if roi in task_rois[task]:
+                    # ROI is defined in this task - use this task's data
+                    roi_data = self.process_roi_in_defining_task(responses, roi, task)
+                else:
+                    # ROI not defined in this task - use other tasks' data
+                    roi_data = self.process_roi_in_other_tasks(responses, roi, task)
+                
+                out.extend(roi_data)
+
+        return pd.DataFrame(out)
 
     def plot_rois(self, roi_response):
         sns.set_context('talk')
@@ -288,7 +280,8 @@ class RunwiseResponse:
         for ax, ((roi, hemi), df) in zip(axes, roi_response.groupby(['roi', 'hemi'], observed=True)):
             sns.barplot(x='trial_type', y='response',
                         hue='trial_type', legend=False,
-                        ax=ax, data=df, palette=colors)
+                        dodge=False, ax=ax,
+                        data=df, palette=colors)
             ax.set_xticks(range(len(self.plotting_conditions)))
             ax.set_xticklabels(self.plotting_conditions, rotation=45, ha='right')
             ax.spines['right'].set_visible(False)
@@ -301,11 +294,10 @@ class RunwiseResponse:
         fig.savefig(f'{self.out_path}/../sub-{self.subject_label}_summary.pdf')
 
     def run(self):
-        responses, affine = self.load_responses()
-        roi_response, overlap = self.get_roi_response(responses, affine)
-        roi_response.to_csv(self.out_file, index=False)
-        overlap.to_csv(self.overlap_out_file, index=False)
-        overlap.to_csv(index=False)
+        responses = self.load_responses()
+        roi_response = self.get_roi_response(responses)
+        # roi_response.to_csv(self.out_file, index=False)
+        roi_response.groupby(['hemi', 'roi', 'trial_type']).mean(numeric_only=True).reset_index().to_csv(self.out_file, index=False)
 
         roi_response = roi_response.loc[roi_response['trial_type'].isin(self.plotting_conditions)].reset_index(drop=True)
         roi_response['trial_type'] = pd.Categorical(roi_response['trial_type'],
@@ -323,8 +315,8 @@ class RunwiseResponse:
 def main():
     parser = argparse.ArgumentParser(description='Run a standard first-level GLM on the localizer tasks')
     parser.add_argument('--dataset_path', '-d', type=str,
-                        default='/mindhive/nklab3/users/emaliem/sts_communication')
-    parser.add_argument('--subject_label', '-s', type=int, default=1,
+                        default='/orcd/data/ngk/001/users/emaliem/sts_communication')
+    parser.add_argument('--subject_label', '-s', type=int, default=2,
                          help='Subject for the GLM')
     parser.add_argument('--space_label', type=str, default='MNI152NLin2009cAsym',
                          help='Space of the GLM')

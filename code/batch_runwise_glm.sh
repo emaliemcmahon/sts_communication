@@ -4,8 +4,8 @@
 #SBATCH --job-name=glm_runwise
 #SBATCH --partition=ou_bcs_normal
 #SBATCH --time=1:30:00
-#SBATCH --mem-per-cpu=4GB
-#SBATCH --cpus-per-task=8
+#SBATCH --mem-per-cpu=2GB
+#SBATCH --cpus-per-task=6
 #SBATCH --output=logs/%x_%A.out
 
 s=$1

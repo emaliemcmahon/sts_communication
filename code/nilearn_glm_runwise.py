@@ -27,10 +27,14 @@ froi_contrasts = {'pointlight': {'interact-noninteract': ['SI-STS']},
                   'communicate': {'body-object': ['EBA'],
                                   '0.5*face_third+0.5*face_noncom-object': ['fSTS', 'FFA'],
                                   'com_phy-phy': ['comphy-STS'],
-                                  'com_ind-ind': ['comind-STS']}}
+                                  'com_ind-ind': ['comind-STS'],
+                                  '0.5*face_third+0.5*face_first-face_noncom': ['facecom-STS'],
+                                  '0.5*com_phy+0.5*com_ind-0.5*phy-0.5*ind': ['dyadcom-STS'],
+                                  '0.5*object+0.5*body': ['EVC', 'MT']}}
 
 roi_size = {'comphy-STS': .05, 'comind-STS': .05, 'TPJ': .1,
-            'EBA': .1, 'fSTS': .1, 'FFA': .1, 'SI-STS': .05}
+            'EBA': .1, 'fSTS': .1, 'FFA': .1, 'SI-STS': .05, ''
+            'EVC': 0.05, 'MT': 0.1, 'dyadcom-STS': .05, 'facecom-STS': .05}
 
 roi_parc = {'comphy-STS': 'anatSTS',
             'comind-STS': 'anatSTS',
