@@ -9,7 +9,6 @@
 #SBATCH --output=logs/%x_%A.out
 
 s=$1
-task=${2:-"pointlight"}
 
 dir=$(pwd)
 
@@ -26,6 +25,6 @@ echo "Using python: $(which python)"
 python --version
 
 # Run Python script
-python code/runwise_response.py -s "$s" -t "$task" -d "$dir" || { echo "Python script failed"; exit 1; }
+python code/runwise_response.py -s "$s" -d "$dir" || { echo "Python script failed"; exit 1; }
 
 echo "Script completed"

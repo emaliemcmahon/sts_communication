@@ -26,7 +26,7 @@ first_level_runwise:
 
 runwise_response:
 	for s in $(subs); do \
-		sbatch $(project_path)/code/subject_runwise_response.sh "$$s"; \
+		sbatch $(project_path)/code/batch_subject_runwise_response.sh "$$s"; \
 	done
 
 group_runwise:

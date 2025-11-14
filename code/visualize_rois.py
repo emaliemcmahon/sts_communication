@@ -15,12 +15,12 @@ class VisualizeROIs:
         self.subject_label = str(args.subject_label).zfill(2)
         self.dataset_path = args.dataset_path
         self.derivatives_path = f'{self.dataset_path}/derivatives'
-        self.roi_path = f'{self.dataset_path}/derivatives/RunwiseResponse/sub-{self.subject_label}'
+        self.roi_path = f'{self.dataset_path}/derivatives/NilearnGLMRunwise/sub-{self.subject_label}'
         self.out_path = f'{self.derivatives_path}/{self.process}'
         self.out_file = f'{self.out_path}/sub-{self.subject_label}_fROIs'
         self.hemis = ['l', 'r']
         self.rois = ['EVC', 'MT', 'FFA', 'EBA', 'fSTS',
-                     'SI-STS', 'TPJ']
+                     'SI-STS', 'TPJ', 'facecom-STS', 'dyadcom-STS']
         Path(self.out_path).mkdir(parents=True, exist_ok=True)
     
     def load_rois(self):
@@ -29,7 +29,7 @@ class VisualizeROIs:
             for iroi, roi in tqdm(enumerate(self.rois), 
                                   desc=f'Loading {hemi} hemisphere',
                                   total=len(self.rois)):
-                roi_file_name = f'{self.roi_path}/{hemi}{roi}.nii.gz'
+                roi_file_name = f'{self.roi_path}/sub-{self.subject_label}_run-1_{hemi}{roi}.nii.gz'
                 if affine is None:
                     roi_img = nib.load(roi_file_name)
                     affine = roi_img.affine
@@ -69,8 +69,23 @@ class VisualizeROIs:
                                 bg_map=fsaverage_sulcal,
                                 bg_on_data=True,
                                 colorbar=colorbar,
+                                threshold=0.5,
                                 cmap='Set1',
                                 title=title)
+            
+            # Customize colorbar with ROI labels
+            if colorbar:
+                # Directly modify the colorbar of the mesh trace
+                fig.figure.data[0].colorbar = dict(
+                    tickmode='array',
+                    tickvals=list(range(1, len(self.rois) + 1)),
+                    ticktext=self.rois,
+                    title='ROI'
+                )
+                # Set color range to start at 1
+                fig.figure.data[0].cmin = 1
+                fig.figure.data[0].cmax = len(self.rois)
+            
             fig.figure.write_image(f'{self.out_file}_view-{view}_hemi-{hemi}.png')
 
     def run(self):
@@ -81,7 +96,7 @@ class VisualizeROIs:
 def main():
     parser = argparse.ArgumentParser(description='Run a standard first-level GLM on the localizer tasks')
     parser.add_argument('--dataset_path', '-d', type=str,
-                        default='/mindhive/nklab3/users/emaliem/sts_communication')
+                        default='/orcd/data/ngk/001/users/emaliem/sts_communication')
     parser.add_argument('--subject_label', '-s', type=int, default=2,
                          help='Subject for the GLM')
     args = parser.parse_args()

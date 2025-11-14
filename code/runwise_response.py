@@ -20,12 +20,15 @@ roi_size = {'EVC': 0.05, 'MT': 0.1,
             'comind-STS': .05,
             'comphy-STS': 0.05,
             'facecom-STS': 0.05,
+            'dyadcom-STS': 0.05,
+            'phy-STS': .05,
             'FFA': .1, 'fSTS': .1, 
             'EBA': .1, 'SI-STS': .05,
             'TPJ': .1}
 
 task_rois = {'communicate': ['EVC', 'MT', 'FFA', 'EBA', 'fSTS',
-                             'comindSTS', 'comphySTS', 'facecomSTS'],
+                             'comindSTS', 'comphySTS', 'facecomSTS', 
+                             'dyadcomSTS', 'phySTS'],
              'pointlight': ['SI-STS'],
              'tom': ['TPJ']}
 
@@ -39,7 +42,8 @@ roi_parc = {'dyad-comSTS': 'anatSTS',
             'comind-STS': 'anatSTS',
             'comphy-STS': 'anatSTS',
             'facecom-STS': 'anatSTS',
-            'SI-STS': 'anatSTS'}
+            'SI-STS': 'anatSTS', 
+            'phy-STS': 'anatSTS'}
 
 
 def roi_switcher(roi):

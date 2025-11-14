@@ -1,9 +1,12 @@
 import argparse
 import os
+import warnings
+from glob import glob
 from tqdm import tqdm
 from pathlib import Path
 from nilearn.plotting import plot_glass_brain, view_img_on_surf
 from nilearn.glm.first_level import first_level_from_bids as flfb
+from nilearn.interfaces.fmriprep import load_confounds
 from nilearn.glm.second_level import SecondLevelModel
 import numpy as np
 import matplotlib.pyplot as plt
@@ -32,6 +35,24 @@ class GroupRandomEffects:
         Path(f'{self.out_path}/sub-group').mkdir(parents=True, exist_ok=True)
 
     def glm(self):
+        # First load confounds for all subjects with custom filtering
+        all_confounds = []
+        all_imgs = []
+        for subj in self.subjs:
+            files = sorted(glob(f'{self.fmriprep_path}/sub-{subj}/ses-*/func/*{self.task_label}*{self.space_label}*bold.nii.gz'))
+            all_imgs.append(files)
+            
+            # Load confounds with motion filtering strategy
+            with warnings.catch_warnings():
+                warnings.filterwarnings('ignore', category=DeprecationWarning)
+                confounds_filtered, sample_masks = load_confounds(files, strategy=('motion', 'scrub'), 
+                                                            fd_threshold=0.5, 
+                                                            std_dvars_threshold=3, 
+                                                            scrub=5,
+                                                            motion='basic')
+            all_confounds.append(confounds_filtered)
+        
+        # Load model info from BIDS
         model_info = flfb(self.dataset_path,
                           self.task_label,
                           self.space_label,
@@ -39,29 +60,33 @@ class GroupRandomEffects:
                           slice_time_ref=None, # Load from the BIDS data
                           smoothing_fwhm=5.0,
                           img_filters=[("desc", "preproc")],
-                          confounds_strategy=('motion', 'scrub'),
-                          confounds_motion='basic',
                           derivatives_folder=self.fmriprep_path,
                           minimize_memory=True, 
                           hrf_model='spm',
-                          confounds_fd_threshold=0.5, #FD in mm
-                          confounds_scrub=5, #remove segments shorter than the given number after scrubbing
                           n_jobs=int(os.cpu_count()/2))
-        (models, models_run_imgs, models_events, models_confounds) = model_info
+        (models, models_run_imgs, models_events, _) = model_info
 
         ncols = 3
         nrows = int(np.ceil(len(models) / ncols))
         fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(16,10))
         title = f'T-Map {self.condition_one} vs {self.condition_two} (FDR q<{self.alpha})'
         axes = np.atleast_2d(axes)
-        model_and_args = zip(self.subjs, models, models_run_imgs, models_events, models_confounds)
+        model_and_args = zip(self.subjs, models, models_run_imgs, models_events, all_confounds)
         for midx, (subj, model, imgs, events, confounds) in tqdm(enumerate(model_and_args),
                                                            total=len(models),
                                                            leave=True,
                                                            desc='First level models'):            
             Path(f'{self.out_path}/sub-{subj}').mkdir(exist_ok=True, parents=True)
-            # fit the GLM
-            model.fit(imgs, events, confounds)
+            
+            # Shift the time series because fMRIPrep slice time corrects to the middle volume
+            # https://reproducibility.stanford.edu/slice-timing-correction-in-fmriprep-and-linear-modeling/
+            events_shifted = []
+            for event in events: 
+                event['onset'] = event['onset'] + 1
+                events_shifted.append(event)
+            
+            # fit the GLM with shifted events and filtered confounds
+            model.fit(imgs, events_shifted, confounds)
             if type(self.contrast) is str: 
                 columns = list(model.design_matrices_[0].columns)
                 self.contrast = np.zeros(len(columns))

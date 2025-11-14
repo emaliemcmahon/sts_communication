@@ -2,10 +2,10 @@
 
 #SBATCH
 #SBATCH --job-name=group_runwise_results
+#SBATCH --partition=mit_normal
 #SBATCH --time=20:00
 #SBATCH --mem-per-cpu=4GB
 #SBATCH --cpus-per-task=2
-#SBATCH --exclude=node064
 #SBATCH --output=logs/%x_%A.out
 
 s=$1
@@ -26,6 +26,6 @@ python --version
 subs=(1 2 3 4 5 7 8 9 11 12 13 14 15 16)
 
 # Run Python script
-python code/group_runwise_results.py "${subs[@]}" || { echo "Python script failed"; exit 1; }
+python code/group_runwise_results.py "${subs[@]}" --overwrite || { echo "Python script failed"; exit 1; }
 
 echo "Script completed"

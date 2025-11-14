@@ -18,17 +18,23 @@ contrasts = [('face-first', 'face-noncom'),
              ('com-ind', 'ind'),
              ('com-joint', 'joint'), 
              ('face-noncom', 'body'), 
-             ('joint', 'com-ind')]
+             ('joint', 'com-ind'),
+                     ('interact', 'noninteract'),
+                     ('belief', 'photo')]
 
 summary_contrasts = [('face-first', 'face-noncom'),
              ('face-third', 'face-noncom'),
              ('com-ind', 'ind'),
-             ('com-joint', 'joint')]
+             ('com-joint', 'joint'),
+                     ('interact', 'noninteract'),
+                     ('belief', 'photo')]
 
 focused_contrasts = [('face-first', 'face-noncom'),
                      ('face-third', 'face-noncom'),
                      ('com-ind', 'ind'),
-                     ('com-joint', 'joint')]
+                     ('com-joint', 'joint'),
+                     ('interact', 'noninteract'),
+                     ('belief', 'photo')]
 
 condition_rename = {'com_phy': 'com-joint', 'phy': 'joint',
                     'com_ind': 'com-ind',
@@ -36,13 +42,15 @@ condition_rename = {'com_phy': 'com-joint', 'phy': 'joint',
                     'face_noncom': 'face-noncom'}
 
 def p2star(p):
-    if p < 0.05:
+    if p < 0.1:
         if 0.001 > p: 
             star = '***'
         elif 0.01 > p >= 0.001:
             star = '**' 
         elif 0.05 > p >= 0.01:
             star = '*'
+        elif 0.1 > p >= 0.05:
+            star = '+'
     else: 
         star = None
     return star
@@ -71,18 +79,26 @@ class GroupRunwiseResults:
                 "#9575CD",  # Soft lavender (Light Purple 1)
                 "#7E57C2",  # Dusty plum (Dark Purple 2)
                 "#B39DDB",  # Pale lilac (Light Purple 2)
+                "#26A69A",  # Dark teal (interact_pointlight)
+                "#80CBC4",  # Light teal (noninteract_pointlight)
+                "#FF9800",  # Dark amber (belief)
+                "#FFCC80",  # Light amber (photo)
             ]
         
         self.conditions = ['object', 'body', 
                            'face_first', 'face_third', 'face_noncom',
-                           'com_phy', 'phy', 'com_ind', 'ind']
+                           'com_phy', 'phy', 'com_ind', 'ind',
+                           'interact', 'noninteract',
+                           'belief', 'photo']
         self.plotting_conditions = ['object', 'body',
                                     'face-first', 'face-third', 'face-noncom',
-                                    'com-joint', 'joint', 'com-ind', 'ind']
+                                    'com-joint', 'joint', 'com-ind', 'ind',
+                                    'interact', 'noninteract',
+                                    'belief', 'photo']
         self.hemis = ['l', 'r']
         self.rois = ['EVC', 'MT', 'FFA', 'EBA', 
-                     'fSTS', 'SI-STS', 'TPJ'] 
-                        #'face-comSTS', 'com-indSTS', 'com-phySTS', 
+                     'fSTS', 'SI-STS', 'TPJ', 'facecom-STS', 'dyadcom-STS', 
+                     'comind-STS', 'comphy-STS', 'phy-STS']
         Path(self.out_path).mkdir(exist_ok=True, parents=True)
 
     def plot_roi_summary(self, df, stats, hemi='r', 
@@ -103,7 +119,7 @@ class GroupRunwiseResults:
             roi_stats = stats.loc[roi]
             sns.barplot(x='trial_type', y='response',
                         hue='trial_type', legend=False,
-                        ax=ax, data=df.loc[roi], 
+                        ax=ax, data=df.loc[roi].reset_index(drop=True), 
                         palette=self.palette, errorbar='se')
             error_max = [line.get_ydata()[1] for line in ax.lines]
 
@@ -155,7 +171,8 @@ class GroupRunwiseResults:
         fig.savefig(f'{self.out_path}/{hemi}h_summary.pdf')
 
     def plot_individual_rois(self, df, stats, hemi='r', 
-                            rois=['fSTS', 'SI-STS']):
+                            rois=['fSTS', 'SI-STS', 'facecom-STS', 'dyadcom-STS', 
+                                  'comind-STS', 'comphy-STS', 'FFA', 'phy-STS']):
         sns.set_context('talk')
         palette = [
                 "#673AB7",  # Rich muted violet (Dark Purple 1)
@@ -166,19 +183,29 @@ class GroupRunwiseResults:
                 '#FFFFFF',
                 "#3949AB",  # Deep muted navy (Dark Blue 1)
                 "#5C6BC0",  # Dusty periwinkle (Dark Blue 2)
-                "#90CAF9",  # Pale sky blue (Light Blue)
+                "#90CAF9",  # Pale sky blue (Light Blue),
+                '#FFFFFF',
+                "#26A69A",  # Dark teal (interact_pointlight)
+                "#80CBC4",  # Light teal (noninteract_pointlight)
+                '#FFFFFF',
+                "#FF9800",  # Dark amber (belief)
+                "#FFCC80",  # Light amber (photo)
+                '#FFFFFF',
+                "#E57373",  # Soft muted red
+                '#6FC276',  # Soft green
             ]
         conditions = [
                       'com-ind', 'ind', 'hold1', 
                       'com-joint', 'joint', 'hold2',
-                      'face-first', 'face-third', 'face-noncom',
+                      'face-first', 'face-third', 'face-noncom', 'hold3',
+                      'interact', 'noninteract', 'hold4',
+                      'belief', 'photo', 'hold5',
+                      'object', 'body'
                       ]
-        
-        df = df.loc[~df.trial_type.isin(['object', 'body'])].reset_index(drop=True)
-        
+                
         df_holder = df.iloc[-1]
         empty_df = [df]
-        for roi, trial_type in product(rois, ['hold1', 'hold2']):
+        for roi, trial_type in product(rois, [f'hold{i}' for i in range(1, 6)]):
             cur_hold = df_holder.copy()
             cur_hold['roi'] = roi
             cur_hold['trial_type'] = trial_type
@@ -198,16 +225,27 @@ class GroupRunwiseResults:
 
         for iroi, roi in enumerate(rois):
             fig, ax = plt.subplots(1, 1,
-                                 figsize=(15, 4))
+                                 figsize=(16, 6))
             sns.barplot(x='trial_type', y='response',
                         hue='trial_type', legend=False,
-                        ax=ax, data=df.loc[roi], 
+                        ax=ax, data=df.loc[roi].reset_index(drop=True), 
                         palette=palette, errorbar='se',
                         dodge=False, width=0.5)
             error_max = [line.get_ydata()[1] for line in ax.lines]
+            # Map error_max to conditions: 
+            # com-ind, ind, hold1, 
+            # com-joint, joint, hold2, 
+            # face-first, face-third, face-noncom, hold3, 
+            # interact, noninteract, hold4, 
+            # belief, photo, hold5
+            # object, body
+            # Lines only exist for non-hold positions, so we need to insert 0s for holds
             error_max = [error_max[0], error_max[1], 0,
                          error_max[2], error_max[3], 0, 
-                         error_max[4], error_max[5], error_max[6]]
+                         error_max[4], error_max[5], error_max[6], 0,
+                         error_max[7], error_max[8], 0,
+                         error_max[9], error_max[10], 0,
+                         error_max[11], error_max[12]]
 
             face_pos = None
             stats_pos = []
@@ -239,9 +277,12 @@ class GroupRunwiseResults:
                     stats_pos.append(y_pos)
             
             ax.set_xticks(range(len(conditions)))
-            ax.set_xticklabels(['communicative', 'independent',' ',
-                                'communicative', 'social not\ncommunicative',' ',
-                                'talking\nto viewer', 'talking off\nscreen', 'self-directed\naction'], 
+            ax.set_xticklabels(['dyads\ntalking', 'dyads\nnot\ninteracting',' ',
+                                'dyads\ntalking', 'dyads\ninteracting\nnot\ntalking',' ',
+                                'face\ntalking\nto viewer', 'face\ntalking\noff\nscreen', 'face\nself\ndirected\naction',' ',
+                                'point\nlight\ninteract', 'point\nlight\nnot\ninteract', ' ',
+                                'ToM\nbelief', 'ToM\nphoto',' ',
+                                'object', 'body'],
                                 ha='center', fontsize=13)
             if stats_pos:
                 ax.set_ylim([0, max(stats_pos)+(max(error_max)*0.1)])
@@ -252,6 +293,7 @@ class GroupRunwiseResults:
             ax.spines['top'].set_visible(False)
             ax.set_xlabel('')
             ax.set_ylabel(r'$\beta$ values')
+            plt.title(f'{roi} - {hemi} hemisphere')
             fig.tight_layout()
             fig.savefig(f'{self.out_path}/roi-{roi}_hemi-{hemi}h.pdf')
 
