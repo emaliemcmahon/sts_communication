@@ -1,11 +1,10 @@
 #!/bin/bash -l
 
-#SBATCH
 #SBATCH --job-name=random_effects
+#SBATCH --partition=mit_normal
 #SBATCH --time=3:00:00
 #SBATCH --mem-per-cpu=4GB
-#SBATCH --cpus-per-task=24
-#SBATCH --exclude=node064
+#SBATCH --cpus-per-task=16
 #SBATCH --output=logs/%x_%A.out
 
 # c1s=(com_phy com_ind face_first face_first face_third face_first+face_third com_phy+com_ind face_noncom+face_third body)

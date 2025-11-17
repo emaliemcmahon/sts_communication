@@ -91,13 +91,34 @@ class GroupRandomEffects:
                 columns = list(model.design_matrices_[0].columns)
                 self.contrast = np.zeros(len(columns))
 
+                # Parse weighted contrasts (e.g., "0.5*com_ind+0.5*com_phy")
                 cond1_averaging = self.condition_one.split('+')
                 for c in cond1_averaging:
-                    self.contrast[columns.index(c)] = 1/len(cond1_averaging)
+                    c = c.strip()
+                    if '*' in c:
+                        # Parse weighted contrast
+                        weight, cond = c.split('*')
+                        weight = float(weight.strip())
+                        cond = cond.strip()
+                    else:
+                        # No weight specified, use equal weighting
+                        weight = 1/len(cond1_averaging)
+                        cond = c
+                    self.contrast[columns.index(cond)] = weight
 
                 cond2_averaging = self.condition_two.split('+')
                 for c in cond2_averaging:
-                    self.contrast[columns.index(c)] = -1/len(cond2_averaging)
+                    c = c.strip()
+                    if '*' in c:
+                        # Parse weighted contrast
+                        weight, cond = c.split('*')
+                        weight = float(weight.strip())
+                        cond = cond.strip()
+                    else:
+                        # No weight specified, use equal weighting
+                        weight = 1/len(cond2_averaging)
+                        cond = c
+                    self.contrast[columns.index(cond)] = -weight
 
                 # Save a visualization of the contrast matrix
                 plot_contrast_matrix(self.contrast, model.design_matrices_[0],
@@ -162,9 +183,9 @@ class GroupRandomEffects:
 def main():
     parser = argparse.ArgumentParser(description='Run a standard first-level GLM on the localizer tasks')
     parser.add_argument('sub_nums', nargs='*', type=int, 
-                        help='List of elements', default=[1,2,3])
+                        help='List of elements', default=[1,2])#default=[1,2,3,4,5,7,8,9,11,12,13,14,15,16])
     parser.add_argument('--dataset_path', '-d', type=str,
-                        default='/mindhive/nklab3/users/emaliem/sts_communication')
+                        default='/orcd/data/ngk/001/users/emaliem/sts_communication')
     parser.add_argument('--condition_one', '-c1', type=str, default='com_ind',
                          help='The first condition for the second level analysis')
     parser.add_argument('--condition_two', '-c2', type=str, default='ind',

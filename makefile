@@ -33,8 +33,8 @@ group_runwise:
 	sbatch $(project_path)/code/batch_group_runwise.sh
 
 # Define contrast arrays (space-separated lists in Make)
-C1S := com_phy com_ind face_first face_first face_third 0.5*face_third+0.5*face_first 0.5*com_phy+0.5*com_ind 0.5*face_third+0.5*face_noncom body phy 0.33*phy+0.33*com_phy+0.33*com_ind
-C2S := phy ind face_noncom face_third face_noncom face_noncom 0.5*phy+0.5*ind object object ind ind
+C1S := 0.5*face_third+0.5*face_first 0.5*com_phy+0.5*com_ind 0.25*face_third+0.25*face_first+0.25*com_phy+0.25*com_ind
+C2S := face_noncom 0.5*phy+0.5*ind 0.33*face_noncom+0.33*phy+0.34*ind
 # Task to submit all random effects jobs
 random_effects:
 	@echo "Submitting random effects jobs..."
