@@ -9,3 +9,4 @@ stimuli/
 .vscode/
 participants.tsv
 participants.json
+notebooks/

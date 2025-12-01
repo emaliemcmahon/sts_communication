@@ -29,8 +29,8 @@ class GroupRandomEffects:
         self.space_label = args.space_label
         self.sub_nums = args.sub_nums
         self.subjs = [str(i).zfill(2) for i in self.sub_nums]
-        self.alpha = 0.001
-        self.correction = None
+        self.alpha = 0.05
+        self.correction = 'fdr'
         print(vars(self))
         Path(f'{self.out_path}/sub-group').mkdir(parents=True, exist_ok=True)
 
@@ -130,6 +130,7 @@ class GroupRandomEffects:
             tmap_thresholded, threshold = threshold_stats_img(tmap, 
                                                               alpha=self.alpha,
                                                               height_control=self.correction)
+            print(f'Sub-{subj} threshold: {threshold}')
             plot_glass_brain(tmap_thresholded,
                              colorbar=True,
                              threshold=threshold,

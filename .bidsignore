@@ -3,3 +3,4 @@ derivatives/
 tmp/
 logs/
 makefile
+notebooks/

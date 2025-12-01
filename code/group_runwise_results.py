@@ -32,9 +32,7 @@ summary_contrasts = [('face-first', 'face-noncom'),
 focused_contrasts = [('face-first', 'face-noncom'),
                      ('face-third', 'face-noncom'),
                      ('com-ind', 'ind'),
-                     ('com-joint', 'joint'),
-                     ('interact', 'noninteract'),
-                     ('belief', 'photo')]
+                     ('com-joint', 'joint')]
 
 condition_rename = {'com_phy': 'com-joint', 'phy': 'joint',
                     'com_ind': 'com-ind',
@@ -60,6 +58,7 @@ class GroupRunwiseResults:
         self.process = 'GroupRunwiseResults'
         self.dataset_path = args.dataset_path
         self.overwrite = args.overwrite
+        self.plot_object_body = args.plot_object_body
         self.derivatives_path = f'{self.dataset_path}/derivatives'
         self.individual_path = f'{self.derivatives_path}/RunwiseResponse'
         self.out_path = f'{self.derivatives_path}/{self.process}'
@@ -174,38 +173,48 @@ class GroupRunwiseResults:
                             rois=['fSTS', 'SI-STS', 'facecom-STS', 'dyadcom-STS', 
                                   'comind-STS', 'comphy-STS', 'FFA', 'phy-STS']):
         sns.set_context('talk')
-        palette = [
-                "#673AB7",  # Rich muted violet (Dark Purple 1)
-                "#B39DDB",  # Pale lilac (Light Purple 2)
-                '#FFFFFF',
-                "#673AB7",  # Rich muted violet (Dark Purple 1)
-                "#B39DDB",  # Pale lilac (Light Purple 2)
-                '#FFFFFF',
-                "#3949AB",  # Deep muted navy (Dark Blue 1)
-                "#5C6BC0",  # Dusty periwinkle (Dark Blue 2)
-                "#90CAF9",  # Pale sky blue (Light Blue),
-                '#FFFFFF',
-                "#26A69A",  # Dark teal (interact_pointlight)
-                "#80CBC4",  # Light teal (noninteract_pointlight)
-                '#FFFFFF',
-                "#FF9800",  # Dark amber (belief)
-                "#FFCC80",  # Light amber (photo)
-                '#FFFFFF',
-                "#E57373",  # Soft muted red
-                '#6FC276',  # Soft green
-            ]
-        conditions = [
-                      'com-ind', 'ind', 'hold1', 
-                      'com-joint', 'joint', 'hold2',
-                      'face-first', 'face-third', 'face-noncom', 'hold3',
-                      'interact', 'noninteract', 'hold4',
-                      'belief', 'photo', 'hold5',
-                      'object', 'body'
-                      ]
+        
+        if self.plot_object_body:
+            palette = [
+                    "#E57373",  # Soft muted red (object)
+                    '#6FC276',  # Soft green (body)
+                    '#FFFFFF',  # hold1
+                    "#673AB7",  # Rich muted violet (Dark Purple 1) - com-ind
+                    "#B39DDB",  # Pale lilac (Light Purple 2) - ind
+                    '#FFFFFF',  # hold2
+                    "#673AB7",  # Rich muted violet (Dark Purple 1) - com-joint
+                    "#B39DDB",  # Pale lilac (Light Purple 2) - joint
+                    '#FFFFFF',  # hold3
+                    "#3949AB",  # Deep muted navy (Dark Blue 1) - face-first
+                    "#5C6BC0",  # Dusty periwinkle (Dark Blue 2) - face-third
+                    "#90CAF9",  # Pale sky blue (Light Blue) - face-noncom
+                ]
+            conditions = ['object', 'body', 'hold1', 
+                          'com-ind', 'ind', 'hold2', 
+                          'com-joint', 'joint', 'hold3',
+                          'face-first', 'face-third', 'face-noncom'
+                          ]
+        else:
+            palette = [
+                    "#673AB7",  # Rich muted violet (Dark Purple 1) - com-ind
+                    "#B39DDB",  # Pale lilac (Light Purple 2) - ind
+                    '#FFFFFF',  # hold1
+                    "#673AB7",  # Rich muted violet (Dark Purple 1) - com-joint
+                    "#B39DDB",  # Pale lilac (Light Purple 2) - joint
+                    '#FFFFFF',  # hold2
+                    "#3949AB",  # Deep muted navy (Dark Blue 1) - face-first
+                    "#5C6BC0",  # Dusty periwinkle (Dark Blue 2) - face-third
+                    "#90CAF9",  # Pale sky blue (Light Blue) - face-noncom
+                ]
+            conditions = ['com-ind', 'ind', 'hold1', 
+                          'com-joint', 'joint', 'hold2',
+                          'face-first', 'face-third', 'face-noncom'
+                          ]
                 
         df_holder = df.iloc[-1]
         empty_df = [df]
-        for roi, trial_type in product(rois, [f'hold{i}' for i in range(1, 6)]):
+        num_holds = 3 if self.plot_object_body else 2
+        for roi, trial_type in product(rois, [f'hold{i}' for i in range(1, num_holds + 1)]):
             cur_hold = df_holder.copy()
             cur_hold['roi'] = roi
             cur_hold['trial_type'] = trial_type
@@ -225,27 +234,28 @@ class GroupRunwiseResults:
 
         for iroi, roi in enumerate(rois):
             fig, ax = plt.subplots(1, 1,
-                                 figsize=(16, 6))
+                                   figsize=(11, 4.8))
+            print(f'Figure size for {roi}: {fig.get_size_inches()}')
             sns.barplot(x='trial_type', y='response',
                         hue='trial_type', legend=False,
                         ax=ax, data=df.loc[roi].reset_index(drop=True), 
                         palette=palette, errorbar='se',
                         dodge=False, width=0.5)
             error_max = [line.get_ydata()[1] for line in ax.lines]
-            # Map error_max to conditions: 
-            # com-ind, ind, hold1, 
-            # com-joint, joint, hold2, 
-            # face-first, face-third, face-noncom, hold3, 
-            # interact, noninteract, hold4, 
-            # belief, photo, hold5
-            # object, body
-            # Lines only exist for non-hold positions, so we need to insert 0s for holds
-            error_max = [error_max[0], error_max[1], 0,
-                         error_max[2], error_max[3], 0, 
-                         error_max[4], error_max[5], error_max[6], 0,
-                         error_max[7], error_max[8], 0,
-                         error_max[9], error_max[10], 0,
-                         error_max[11], error_max[12]]
+            # Map error_max to conditions (inserting 0s for hold positions)
+            if self.plot_object_body:
+                # object, body, hold1, com-ind, ind, hold2, com-joint, joint, hold3, 
+                # face-first, face-third, face-noncom
+                error_max = [error_max[0], error_max[1], 0,
+                             error_max[2], error_max[3], 0, 
+                             error_max[4], error_max[5], 0, 
+                             error_max[6], error_max[7], error_max[8]]
+            else:
+                # com-ind, ind, hold1, com-joint, joint, hold2,
+                # face-first, face-third, face-noncom
+                error_max = [error_max[0], error_max[1], 0,
+                             error_max[2], error_max[3], 0, 
+                             error_max[4], error_max[5], error_max[6]]
 
             face_pos = None
             stats_pos = []
@@ -277,12 +287,99 @@ class GroupRunwiseResults:
                     stats_pos.append(y_pos)
             
             ax.set_xticks(range(len(conditions)))
-            ax.set_xticklabels(['dyads\ntalking', 'dyads\nnot\ninteracting',' ',
-                                'dyads\ntalking', 'dyads\ninteracting\nnot\ntalking',' ',
-                                'face\ntalking\nto viewer', 'face\ntalking\noff\nscreen', 'face\nself\ndirected\naction',' ',
-                                'point\nlight\ninteract', 'point\nlight\nnot\ninteract', ' ',
-                                'ToM\nbelief', 'ToM\nphoto',' ',
-                                'object', 'body'],
+            if self.plot_object_body:
+                ax.set_xticklabels(['object', 'body', ' ',
+                                    'dyads\ntalking', 'dyads\nnot\ninter-\nacting', ' ',
+                                    'dyads\ntalking', 'dyads\ninter-\nacting\nnot\ntalking', ' ',
+                                    'face\ntalking\nto viewer', 'face\ntalking\noff\nscreen', 'face\nself\ndirected\naction'],
+                                    ha='center', fontsize=13)
+            else:
+                ax.set_xticklabels(['dyads\ntalking', 'dyads\nnot\ninter-\nacting', ' ',
+                                    'dyads\ntalking', 'dyads\ninter-\nacting\nnot\ntalking', ' ',
+                                    'face\ntalking\nto viewer', 'face\ntalking\noff\nscreen', 'face\nself\ndirected\naction'],
+                                    ha='center', fontsize=13)
+            if stats_pos:
+                ax.set_ylim([0, max(stats_pos)+(max(error_max)*0.1)])
+            else:
+                ax.set_ylim([0, ax.get_ylim()[-1]])
+
+            ax.spines['right'].set_visible(False)
+            ax.spines['top'].set_visible(False)
+            ax.set_xlabel('')
+            ax.set_ylabel(r'$\beta$ values')
+            # plt.title(f'{roi} - {hemi} hemisphere')
+            fig.tight_layout()
+            fig.savefig(f'{self.out_path}/roi-{roi}_hemi-{hemi}h.pdf')
+
+    def plot_object_body_pointlight(self, df, stats, hemi='r',
+                                     rois=['fSTS', 'SI-STS', 'facecom-STS', 'dyadcom-STS', 
+                                           'comind-STS', 'comphy-STS', 'FFA']):
+        """Plot object, body, and pointlight conditions in a separate figure."""
+        sns.set_context('talk')
+        
+        palette = [
+                "#E57373",  # Soft muted red (object)
+                '#6FC276',  # Soft green (body)
+                '#FFFFFF',  # hold
+                "#26A69A",  # Dark teal (interact)
+                "#80CBC4",  # Light teal (noninteract)
+            ]
+        conditions = ['object', 'body', 'hold1', 'interact', 'noninteract']
+        
+        df_holder = df.iloc[-1]
+        empty_df = [df]
+        for roi, trial_type in product(rois, ['hold1']):
+            cur_hold = df_holder.copy()
+            cur_hold['roi'] = roi
+            cur_hold['trial_type'] = trial_type
+            cur_hold['response'] = 0
+            empty_df.append(cur_hold)
+        df = pd.concat(empty_df)
+
+        df['trial_type'] = pd.Categorical(df['trial_type'],
+                                          ordered=True,
+                                          categories=conditions)
+
+        df = df.loc[df.roi.isin(rois) & (df.hemi == hemi)].set_index('roi')
+
+        # Filter stats for interact vs noninteract contrast only
+        stats = stats.loc[(stats.c1 == 'interact') & (stats.c2 == 'noninteract')].reset_index(drop=True)
+        stats = stats.loc[stats.roi.isin(rois) & (stats.hemi == hemi)].set_index('roi')
+
+        for iroi, roi in enumerate(rois):
+            fig, ax = plt.subplots(1, 1, figsize=(6, 4.8))
+            sns.barplot(x='trial_type', y='response',
+                        hue='trial_type', legend=False,
+                        ax=ax, data=df.loc[roi].reset_index(drop=True), 
+                        palette=palette, errorbar='se',
+                        dodge=False, width=0.5)
+            error_max = [line.get_ydata()[1] for line in ax.lines]
+            # object, body, hold1, interact, noninteract
+            error_max = [error_max[0], error_max[1], 0, error_max[2], error_max[3]]
+
+            stats_pos = []
+            if len(stats) > 0 and roi in stats.index:
+                roi_stats = stats.loc[roi]
+                if isinstance(roi_stats, pd.Series):
+                    roi_stats = pd.DataFrame([roi_stats])
+                    
+                for _, row in roi_stats.iterrows():
+                    c1_ind = conditions.index(row['c1'])
+                    c2_ind = conditions.index(row['c2'])
+                    star = p2star(row['p'])
+                    
+                    if star is not None:
+                        pair_max = max([error_max[c1_ind], error_max[c2_ind]])
+                        y_pos = pair_max + (max(error_max)*0.05)
+                        ax.hlines(xmin=c1_ind, xmax=c2_ind, y=y_pos, color='k')
+                        ax.text(x=c1_ind+((c2_ind-c1_ind)/2),
+                                y=y_pos, s=star, ha='center', 
+                                fontsize=18)
+                        stats_pos.append(y_pos)
+            
+            ax.set_xticks(range(len(conditions)))
+            ax.set_xticklabels(['object', 'body', ' ',
+                                'point\nlight\ninteract', 'point\nlight\nnot\ninteract'],
                                 ha='center', fontsize=13)
             if stats_pos:
                 ax.set_ylim([0, max(stats_pos)+(max(error_max)*0.1)])
@@ -293,9 +390,8 @@ class GroupRunwiseResults:
             ax.spines['top'].set_visible(False)
             ax.set_xlabel('')
             ax.set_ylabel(r'$\beta$ values')
-            plt.title(f'{roi} - {hemi} hemisphere')
             fig.tight_layout()
-            fig.savefig(f'{self.out_path}/roi-{roi}_hemi-{hemi}h.pdf')
+            fig.savefig(f'{self.out_path}/roi-{roi}_hemi-{hemi}h_object-body-pointlight.pdf')
 
     def load_data(self):
         df = []
@@ -347,7 +443,8 @@ class GroupRunwiseResults:
                                             categories=self.subjs)
         for hemi in ['l', 'r']:
             self.plot_roi_summary(mean_df, summary, hemi=hemi)  
-            self.plot_individual_rois(mean_df, summary, hemi=hemi)  
+            self.plot_individual_rois(mean_df, summary, hemi=hemi)
+            self.plot_object_body_pointlight(mean_df, summary, hemi=hemi)  
 
 def main():
     parser = argparse.ArgumentParser()
@@ -356,6 +453,8 @@ def main():
     parser.add_argument('--dataset_path', '-d', type=str,
                         default='/orcd/data/ngk/001/users/emaliem/sts_communication')
     parser.add_argument('--overwrite', action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument('--plot_object_body', action=argparse.BooleanOptionalAction, default=False,
+                        help='Include object and body conditions in individual ROI plots')
     args = parser.parse_args()
     GroupRunwiseResults(args).run()
 
