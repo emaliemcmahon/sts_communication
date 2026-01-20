@@ -40,15 +40,14 @@ condition_rename = {'com_phy': 'com-joint', 'phy': 'joint',
                     'face_noncom': 'face-noncom'}
 
 def p2star(p):
-    if p < 0.1:
-        if 0.001 > p: 
-            star = '***'
-        elif 0.01 > p >= 0.001:
-            star = '**' 
-        elif 0.05 > p >= 0.01:
-            star = '*'
-        elif 0.1 > p >= 0.05:
-            star = '+'
+    if 0.001 > p: 
+        star = '***'
+    elif 0.01 > p >= 0.001:
+        star = '**' 
+    elif 0.05 > p >= 0.01:
+        star = '*'
+    elif 0.1 > p >= 0.05:
+        star = '~'
     else: 
         star = None
     return star
@@ -66,6 +65,7 @@ class GroupRunwiseResults:
         self.stats_file = f'{self.out_path}/stats.csv'
         self.sub_nums = args.sub_nums
         self.subjs = [f'sub-{str(i).zfill(2)}' for i in self.sub_nums]
+        print('Subjects: ', self.subjs)
         print(vars(self))
         self.subj_colors = ['black', 'dimgray']
         self.palette = [
