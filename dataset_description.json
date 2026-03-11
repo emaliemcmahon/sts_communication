@@ -1,17 +1,13 @@
 {
-    "Name": "",
-    "BIDSVersion": "v1.9.0",
-    "License": "",
+    "Name": "Communication selectivity in the human brain",
+    "License": "MIT",
     "Authors": [
-        ""
+        "Emalie McMahon",
+        "Nancy Kanwisher"
     ],
-    "Acknowledgments": "",
-    "HowToAcknowledge": "",
+    "Acknowledgements": "This work was supported by the MIT Simons Center for the Social brain",
     "Funding": [
-        ""
+        "Simons Center for the Social Brain."
     ],
-    "ReferencesAndLinks": [
-        ""
-    ],
-    "DatasetDOI": ""
+    "BIDSVersion": "1.8.0"
 }
