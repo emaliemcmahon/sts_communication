@@ -12,19 +12,19 @@ src=$2
 
 ses=01
 
-# scratch_top=/orcd/data/ngk/001/users/emaliem/sts_communication/
+scratch_top=/orcd/data/ngk/001/users/emaliem/sts_communication/
 
-# # Conver the DICOM to NII and convert to BIDS format
-# conda activate dcm2bids
-# dcm2bids -p ${par} -s ${ses} \
-#   -d sourcedata/${src}/ \
-#   -c code/dcm2bids.config -l DEBUG
+# Convert the DICOM to NII and convert to BIDS format
+conda activate dcm2bids
+dcm2bids -p ${par} -s ${ses} \
+  -d sourcedata/${src}/ \
+  -c code/dcm2bids.config -l DEBUG
 
-# # Remove runs that were aborted
-# conda deactivate
+# Remove runs that were aborted
+conda deactivate
 conda activate nilearn
-# python code/rm_aborted_runs.py \
-#   -d ${scratch_top}/sts_communication/sub-${par}/ses-${ses}/func
+python code/rm_aborted_runs.py \
+  -d ${scratch_top}/sub-${par}/ses-${ses}/func
 
 # Plot the anatomical image
 python code/visualize_anatomy.py \
@@ -32,6 +32,7 @@ python code/visualize_anatomy.py \
   -i orig_anat.jpg
 
 # Deface the anatomical image
+conda deactivate
 conda activate pydeface_env
 module load community-modules
 module load fsl

@@ -24,6 +24,7 @@ echo "Using python: $(which python)"
 python --version
 
 # Run Python script
-python code/nilearn_glm_runwise.py -s "$s" -t "$task" || { echo "Python script failed"; exit 1; }
+python code/nilearn_glm_runwise.py \
+-s "$s" -t "$task" || { echo "Python script failed"; exit 1; }
 
 echo "Script completed"

@@ -25,6 +25,7 @@ echo "Using python: $(which python)"
 python --version
 
 # Run Python script
-python code/runwise_response.py -s "$s" -d "$dir" || { echo "Python script failed"; exit 1; }
+python code/runwise_response.py -s "$s" \
+-d "$dir" || { echo "Python script failed"; exit 1; }
 
 echo "Script completed"

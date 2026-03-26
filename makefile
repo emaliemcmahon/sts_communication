@@ -1,7 +1,7 @@
 user=$(shell whoami)
 project_path=/orcd/data/ngk/001/users/$(user)/sts_communication
-subs := 01 02 03 04 05 07 08 09 11 12 13 14 15 16
-tom_subs := 01 03 04 05 07 08 09 11 12 13 14 15 16
+subs := 01 02 03 04 05 07 08 09 11 12 13 14 15 16 18 19
+tom_subs := 01 03 04 05 07 08 09 11 12 13 14 15 16 18 19
 
 
 # Steps to run

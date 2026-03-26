@@ -158,7 +158,7 @@ class GroupRunwiseResults:
     def plot_individual_rois(self, df, stats, hemi='r', 
                             rois=['fSTS', 'SI-STS', 'facecom-STS', 'dyadcom-STS', 
                                   'comind-STS', 'comphy-STS', 'FFA', 'phy-STS']):
-        sns.set_context('talk')
+        sns.set_context('poster')
         
         if self.plot_object_body:
             palette = [
@@ -237,7 +237,7 @@ class GroupRunwiseResults:
 
         for roi in rois:
             fig, ax = plt.subplots(1, 1,
-                                   figsize=(1.2*len(conditions), 4.8))
+                                   figsize=(1.2*len(conditions), 4.6))
             sns.barplot(x='trial_type', y='response',
                         hue='trial_type', legend=False,
                         ax=ax, data=df.loc[roi].reset_index(drop=True), 
@@ -263,13 +263,14 @@ class GroupRunwiseResults:
                     else:
                         if face_pos is None:
                             face_max = max([error_max[conditions.index(cond)] for cond in conditions if 'face' in cond])
-                            face_pos = face_max + (max(error_max)*0.05)
+                            face_pos = face_max + (max(error_max)*0.075)
                             y_pos = face_pos
                         else:
-                            face_pos += max(error_max)*0.1
+                            face_pos += max(error_max)*0.15
                             y_pos = face_pos
                             
-                    ax.hlines(xmin=c1_ind, xmax=c2_ind, y=y_pos, color='k')
+                    ax.hlines(xmin=c1_ind, xmax=c2_ind, y=y_pos, 
+                              color='gray', linewidth=2)
                     ax.text(x=c1_ind+((c2_ind-c1_ind)/2),
                             y=y_pos, s=star, ha='center', 
                             fontsize=18)
@@ -278,7 +279,7 @@ class GroupRunwiseResults:
             ax.set_xticks(range(len(conditions)))
             ax.set_xticklabels(xtick_labels, ha='center', fontsize=13)
             if stats_pos:
-                ax.set_ylim([0, max(stats_pos)+(max(error_max)*0.1)])
+                ax.set_ylim([0, max(stats_pos)+(max(error_max)*0.15)])
             else:
                 ax.set_ylim([0, ax.get_ylim()[-1]])
 
@@ -345,7 +346,7 @@ class GroupRunwiseResults:
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('sub_nums', nargs='*', type=int, help='List of elements', 
-                        default=[1,2,3,4,5,7,8,9,11,12,13,14,15,16])
+                        default=[1,2,3,4,5,7,8,9,11,12,13,14,15,16,18,19])
     parser.add_argument('--dataset_path', '-d', type=str,
                         default='/orcd/data/ngk/001/users/emaliem/sts_communication')
     parser.add_argument('--overwrite', action=argparse.BooleanOptionalAction, default=False)
