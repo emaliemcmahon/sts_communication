@@ -1,8 +1,7 @@
 user=$(shell whoami)
 project_path=/orcd/data/ngk/001/users/$(user)/sts_communication
-# subs := 01 02 03 04 05 07 08 09 11 12 13 14 15 16 18 19 20 21 22
-# tom_subs := 01 03 04 05 07 08 09 11 12 13 14 15 16 18 19
-subs := 22
+subs := 01 02 03 04 05 07 08 09 11 12 13 14 15 16 18 19 20 21 22 23
+tom_subs := 01 03 04 05 07 08 09 11 12 13 14 15 16 18 19 22 23
 
 # Steps to run
 all: preprocess rois first_level_runwise runwise_response group_runwise communicate_random_effects loc_random_effects
