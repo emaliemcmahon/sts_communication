@@ -17,6 +17,10 @@ contrasts = [('face-first', 'face-noncom'),
              ('face-third', 'face-noncom'),
              ('com-ind', 'ind'),
              ('com-joint', 'joint'), 
+             ('com-ind', 'interact'),
+             ('com-joint', 'interact'),
+             ('face-first', 'interact'),
+             ('face-third', 'interact'),
              ('interact', 'noninteract'),
              ('belief', 'photo')]
 

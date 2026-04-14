@@ -12,7 +12,7 @@ src=$2
 
 ses=01
 
-scratch_top=/orcd/data/ngk/001/users/emaliem/sts_communication/
+scratch_top=/orcd/data/ngk/001/users/emaliem/sts_communication
 
 # Convert the DICOM to NII and convert to BIDS format
 conda activate dcm2bids

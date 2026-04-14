@@ -1,8 +1,8 @@
 user=$(shell whoami)
 project_path=/orcd/data/ngk/001/users/$(user)/sts_communication
-subs := 01 02 03 04 05 07 08 09 11 12 13 14 15 16 18 19
-tom_subs := 01 03 04 05 07 08 09 11 12 13 14 15 16 18 19
-
+# subs := 01 02 03 04 05 07 08 09 11 12 13 14 15 16 18 19 20 21 22
+# tom_subs := 01 03 04 05 07 08 09 11 12 13 14 15 16 18 19
+subs := 22
 
 # Steps to run
 all: preprocess rois first_level_runwise runwise_response group_runwise communicate_random_effects loc_random_effects
@@ -33,14 +33,14 @@ group_runwise:
 	sbatch $(project_path)/code/batch_group_runwise.sh $(subs)
 
 # Define contrast arrays (space-separated lists in Make)
-COM1S := 0.5*face_third+0.5*face_first 0.5*com_phy+0.5*com_ind \
-0.25*face_third+0.25*face_first+0.25*com_phy+0.25*com_ind \
-com_phy com_ind face_third face_first \
-0.5*face_third+0.5*face_noncom body face_first
-COM2S := face_noncom 0.5*phy+0.5*ind \
-0.33*face_noncom+0.33*phy+0.34*ind \
-phy ind face_noncom face_noncom \
-object object face_third
+COM1S := 0.25*face_third+0.25*face_first+0.25*com_phy+0.25*com_ind #\
+# 0.5*face_third+0.5*face_first 0.5*com_phy+0.5*com_ind \
+# com_phy com_ind face_third face_first \
+# 0.5*face_third+0.5*face_noncom body face_first
+COM2S := 0.33*face_noncom+0.33*phy+0.34*ind #\
+# face_noncom 0.5*phy+0.5*ind \
+# phy ind face_noncom face_noncom \
+# object object face_third
 communicate_random_effects:
 	@echo "Submitting random effects jobs..."
 	$(eval LENGTH := $(words $(COM1S)))

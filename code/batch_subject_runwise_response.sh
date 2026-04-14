@@ -2,7 +2,7 @@
 
 #SBATCH
 #SBATCH --job-name=subject_runwise_response
-#SBATCH --partition=mit_normal
+#SBATCH --partition=ou_bcs_normal
 #SBATCH --time=15:00
 #SBATCH --mem-per-cpu=4GB
 #SBATCH --cpus-per-task=2
