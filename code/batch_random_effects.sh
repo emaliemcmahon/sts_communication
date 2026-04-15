@@ -17,10 +17,19 @@ conda activate nilearn
 c1=$1
 c2=$2
 task=$3
-subs=(${@:4})  # Capture subjects from 4th argument onwards
+
+subs=(01 02 03 04 05 07 08 09 11 12 13 14 15 16 18 19 20 21 22 23)
+tom_subs=(01 03 04 05 07 08 09 11 12 13 14 15 16 18 19 22 23)
+
+if [ "$task" == "tom" ]; then
+    selected_subs=("${tom_subs[@]}")
+else
+    selected_subs=("${subs[@]}")
+fi
 
 echo "$c1 $c2"
-echo "${subs[@]}"
+echo "$task"
+echo "${selected_subs[@]}"
 
-python code/group_random_effects.py "${subs[@]}" \
+python code/group_random_effects.py "${selected_subs[@]}" \
     -c1 $c1 -c2 $c2 -t $task

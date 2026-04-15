@@ -33,6 +33,7 @@ class GroupRandomEffects:
         self.subjs = [str(i).zfill(2) for i in self.sub_nums]
         self.alpha = 0.05
         self.correction = 'fdr'
+        self.frame_threshold = 12  # Threshold for number of removed frames per run
         print(vars(self))
         Path(f'{self.out_path}/sub-group').mkdir(parents=True, exist_ok=True)
 

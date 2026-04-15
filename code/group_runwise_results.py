@@ -11,16 +11,17 @@ from scipy.stats import ttest_rel
 import numpy as np
 from matplotlib.collections import  PathCollection
 from itertools import product 
+from utils.stats import p2star
 
 
 contrasts = [('face-first', 'face-noncom'),
              ('face-third', 'face-noncom'),
              ('com-ind', 'ind'),
              ('com-joint', 'joint'), 
-             ('com-ind', 'interact'),
-             ('com-joint', 'interact'),
-             ('face-first', 'interact'),
-             ('face-third', 'interact'),
+            #  ('com-ind', 'interact'),
+            #  ('com-joint', 'interact'),
+            #  ('face-first', 'interact'),
+            #  ('face-third', 'interact'),
              ('interact', 'noninteract'),
              ('belief', 'photo')]
 
@@ -29,18 +30,6 @@ condition_rename = {'com_phy': 'com-joint', 'phy': 'joint',
                     'face_first': 'face-first', 'face_third': 'face-third',
                     'face_noncom': 'face-noncom'}
 
-def p2star(p):
-    if 0.001 > p: 
-        star = '***'
-    elif 0.01 > p >= 0.001:
-        star = '**' 
-    elif 0.05 > p >= 0.01:
-        star = '*'
-    elif 0.1 > p >= 0.05:
-        star = '~'
-    else: 
-        star = None
-    return star
 
 class GroupRunwiseResults:
     def __init__(self, args):
@@ -307,10 +296,10 @@ class GroupRunwiseResults:
     def statistical_analysis(self, mean_df):
         summary = []
         for (hemi, roi), roi_df in mean_df.groupby(['hemi', 'roi'], observed=True):
-            roi_df.set_index('trial_type', inplace=True)
             for (c1, c2) in contrasts:
-                a = roi_df.loc[c1].sort_values(by='subject_label')['response'].to_numpy()
-                b = roi_df.loc[c2].sort_values(by='subject_label')['response'].to_numpy()
+                contrast_df = roi_df[roi_df.trial_type.isin([c1, c2])].pivot(index='subject_label', columns='trial_type', values='response').dropna()
+                a = contrast_df[c1].to_numpy()
+                b = contrast_df[c2].to_numpy()
                 stats = ttest_rel(a, b)#, alternative='greater')
                 summary.append({'hemi': hemi, 'roi': roi,
                                 'c1': c1, 'c2': c2, 
@@ -353,7 +342,7 @@ def main():
                         default=[1,2,3,4,5,7,8,9,11,12,13,14,15,16,18,19,20,21,22,23])
     parser.add_argument('--dataset_path', '-d', type=str,
                         default='/orcd/data/ngk/001/users/emaliem/sts_communication')
-    parser.add_argument('--overwrite', action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument('--overwrite', action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument('--plot_object_body', action=argparse.BooleanOptionalAction, default=True,
                         help='Include object and body conditions in individual ROI plots')
     args = parser.parse_args()

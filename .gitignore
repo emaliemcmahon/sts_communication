@@ -10,3 +10,5 @@ stimuli/
 participants.tsv
 participants.json
 notebooks/
+**/__pycache__/
+__pycache__/

@@ -46,7 +46,7 @@ communicate_random_effects:
 	$(foreach i, $(shell seq 1 $(LENGTH)), \
 		$(eval C1 := $(word $(i),$(COM1S))) \
 		$(eval C2 := $(word $(i),$(COM2S))) \
-		sbatch $(project_path)/code/batch_random_effects.sh $(C1) $(C2) communicate $(subs[@]); \
+		sbatch $(project_path)/code/batch_random_effects.sh $(C1) $(C2) communicate; \
 		echo $(C1) $(C2); \
 	)
 
@@ -60,6 +60,6 @@ loc_random_effects:
 		$(eval C1 := $(word $(i),$(C1S))) \
 		$(eval C2 := $(word $(i),$(C2S))) \
 		$(eval TASK := $(word $(i),$(TASKS))) \
-		sbatch $(project_path)/code/batch_random_effects.sh $(C1) $(C2) $(TASK) $(subs[@]); \
+		sbatch $(project_path)/code/batch_random_effects.sh $(C1) $(C2) $(TASK); \
 		echo $(C1) $(C2) $(TASK); \
 	)
