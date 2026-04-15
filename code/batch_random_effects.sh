@@ -16,15 +16,8 @@ conda activate nilearn
 
 c1=$1
 c2=$2
-task=${3:-"communicate"}
-
-
-if [ "$task" = "tom" ]; then
-    subs=(1 3 4 5 7 8 9 11 12 13 14 15 16 18 19)
-else
-    subs=(1 2 3 4 5 7 8 9 11 12 13 14 15 16 18 19 20 21)
-fi
-
+task=$3
+subs=(${@:4})  # Capture subjects from 4th argument onwards
 
 echo "$c1 $c2"
 echo "${subs[@]}"

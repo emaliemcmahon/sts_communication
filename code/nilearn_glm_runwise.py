@@ -12,6 +12,7 @@ from nilearn.plotting import plot_glass_brain
 import numpy as np
 import matplotlib.pyplot as plt
 from itertools import product
+from utils.mri import check_motion_filtering
 
 
 n_groups = {'pointlight': 4, 'tom': 2, 'communicate': 9}
@@ -59,47 +60,7 @@ def info2vars(model_info):
     return models[0], imgs[0], events[0], confounds[0]
 
 
-def check_motion_filtering(sample_masks, n_trs, threshold=12, one_indexed=False):
-    """
-    Return a list of runs where more than `threshold` frames were removed.
 
-    Parameters
-    ----------
-    sample_masks : array-like or list of array-like
-        Each element is a numpy array of kept-volume indices (from load_confounds).
-        If a single run, can pass a single array directly.
-    n_trs : int or list of int
-        Total number of volumes (TRs) in each corresponding run.
-    threshold : int, default=12
-        Number of removed frames above which a run is considered exceeding.
-    one_indexed : bool, default=True
-        If True, return runs numbered from 1 (run 1, 2, ...). 
-        If False, return 0-indexed run indices.
-
-    Returns
-    -------
-    list of int
-        Runs that exceed the threshold for removed frames.
-    """
-    import numpy as np
-
-    # Normalize to lists
-    if not isinstance(sample_masks, (list, tuple)):
-        sample_masks = [sample_masks]
-    if not isinstance(n_trs, (list, tuple, np.ndarray)):
-        n_trs = [n_trs] * len(sample_masks)
-
-    bad_runs = []
-    good_runs = []
-    for i, (mask, total) in enumerate(zip(sample_masks, n_trs)):
-        n_kept = len(mask) if mask is not None else total
-        n_removed = total - n_kept
-        if n_removed > threshold:
-            bad_runs.append(i + 1 if one_indexed else i)
-        else:
-            good_runs.append(i + 1 if one_indexed else i)   
-
-    return bad_runs, good_runs
 
 def split_into_groups(items, n_groups=3):
     return [items[i::n_groups] for i in range(n_groups)]
@@ -254,10 +215,14 @@ class NilearnGLMRunwise:
         self.subject_label = args.subject_label
         self.dataset_path = args.dataset_path
         self.overwrite = args.overwrite
+        self.motion_mode = args.motion_mode
         self.derivatives_path = f'{self.dataset_path}/derivatives'
         self.fmriprep_path = f'{self.derivatives_path}/fmriprep'
         self.parcel_path = f'{self.derivatives_path}/parcels-{self.space_label}'
-        self.out_path = f'{self.derivatives_path}/{self.process}'
+        if self.motion_mode == 'lenient':
+            self.out_path = f'{self.derivatives_path}/{self.process}'
+        else:
+            self.out_path = f'{self.derivatives_path}/{self.process}_{self.motion_mode}'
         self.TR = 2
         self.frame_threshold = 12
         print(vars(self))
@@ -277,11 +242,18 @@ class NilearnGLMRunwise:
         # Load confounds with motion filtering strategy to get sample_masks
         with warnings.catch_warnings():
             warnings.filterwarnings('ignore', category=DeprecationWarning)
-            confounds_filtered, sample_masks = load_confounds(files, strategy=('motion', 'scrub'), 
-                                                        fd_threshold=1, 
-                                                        std_dvars_threshold=3, 
-                                                        scrub=0,
-                                                        motion='basic')
+            if self.motion_mode == 'lenient':
+                confounds_filtered, sample_masks = load_confounds(files, strategy=('motion', 'scrub'), 
+                                                            fd_threshold=1, 
+                                                            std_dvars_threshold=3, 
+                                                            scrub=0,
+                                                            motion='basic')
+            else:  # strict
+                confounds_filtered, sample_masks = load_confounds(files, strategy=('motion', 'scrub'), 
+                                                            fd_threshold=0.5, 
+                                                            std_dvars_threshold=1.5, 
+                                                            scrub=5,
+                                                            motion='basic')
 
         # Check which runs exceed motion threshold
         n_trs = nib.load(files[0]).shape[-1]
@@ -292,6 +264,10 @@ class NilearnGLMRunwise:
         for i, m in enumerate(sample_masks):
             if m is not None:
                 print(f'Run {i}: {len(m)=}/{n_trs=}')
+
+        if self.motion_mode == 'strict' and len(excluded_runs) >= 3:
+            print(f"Too many excluded runs ({len(excluded_runs)}), skipping analysis for subject {self.subject_label}")
+            return
 
         # Load model with first_level_from_bids but use our filtered confounds
         model_info = flfb(self.dataset_path,
@@ -318,37 +294,42 @@ class NilearnGLMRunwise:
             event['onset'] = event['onset'] + 1
             events_shifted.append(event)
 
-        run_groups = split_into_groups(included_runs, n_groups=n_groups[self.task_label])
+        n_groups_eff = min(n_groups[self.task_label], len(included_runs))
+        run_groups = split_into_groups(included_runs, n_groups=n_groups_eff)
         for igroup, runs in tqdm(enumerate(run_groups),
-                                 total=n_groups[self.task_label], desc='fitting run groups'):
+                                 total=n_groups_eff, desc='fitting run groups'):
             # Compute the model and contrasts to define the fROIs
-            model.fit([imgs[r] for r in included_runs if r not in runs], 
-                                [events_shifted[r] for r in included_runs if r not in runs],
-                                [confounds[r] for r in included_runs if r not in runs])
-            for contrast in froi_contrasts[self.task_label].keys():
-                contrast_name = hyphen_to_camel_case(contrast)
-                title = f'sub-{self.subject_label}_task-{self.task_label}_contrast-{contrast_name}_run-{igroup+1}'
-                contrast_file = f'{self.out_path}/sub-{self.subject_label}/{title}.nii.gz'            
-                stat_map = model.compute_contrast(contrast, output_type='z_score')
-                nib.save(stat_map, contrast_file)
+            froi_imgs = [imgs[r] for r in included_runs if r not in runs]
+            froi_events = [events_shifted[r] for r in included_runs if r not in runs]
+            froi_confounds = [confounds[r] for r in included_runs if r not in runs]
+            if froi_imgs:
+                model.fit(froi_imgs, froi_events, froi_confounds)
+                for contrast in froi_contrasts[self.task_label].keys():
+                    contrast_name = hyphen_to_camel_case(contrast)
+                    title = f'sub-{self.subject_label}_task-{self.task_label}_contrast-{contrast_name}_run-{igroup+1}'
+                    contrast_file = f'{self.out_path}/sub-{self.subject_label}/{title}.nii.gz'            
+                    stat_map = model.compute_contrast(contrast, output_type='z_score')
+                    nib.save(stat_map, contrast_file)
 
-                for hemi, roi in product(['l', 'r'], froi_contrasts[self.task_label][contrast]):
-                    output_file = f'{self.out_path}/sub-{self.subject_label}/sub-{self.subject_label}_run-{igroup+1}_{hemi}{roi}'      
-                    mask_file = f'{self.parcel_path}/{hemi}{roi_switcher(roi)}.nii.gz'
-                    new_mask = selective_mask_img(mask_file, contrast_file, 
-                                                  keep_prop=roi_size[roi],
-                                                  debug_output=f'{output_file}.pdf')
-                    nib.save(new_mask, f'{output_file}.nii.gz')
+                    for hemi, roi in product(['l', 'r'], froi_contrasts[self.task_label][contrast]):
+                        output_file = f'{self.out_path}/sub-{self.subject_label}/sub-{self.subject_label}_run-{igroup+1}_{hemi}{roi}'      
+                        mask_file = f'{self.parcel_path}/{hemi}{roi_switcher(roi)}.nii.gz'
+                        new_mask = selective_mask_img(mask_file, contrast_file, 
+                                                      keep_prop=roi_size[roi],
+                                                      debug_output=f'{output_file}.pdf')
+                        nib.save(new_mask, f'{output_file}.nii.gz')
 
             # Compute the model and contrasts to estimate the responses
-            model.fit([imgs[r] for r in included_runs if r in runs], 
-                      [events_shifted[r] for r in included_runs if r in runs],
-                      [confounds[r] for r in included_runs if r in runs])
-            for contrast in response_contrasts[self.task_label]:
-                title = f'sub-{self.subject_label}_task-{self.task_label}_contrast-{contrast}_run-{igroup+1}'
-                contrast_file = f'{self.out_path}/sub-{self.subject_label}/{title}.nii.gz' 
-                stat_map = model.compute_contrast(contrast, output_type='effect_size')
-                nib.save(stat_map, contrast_file)
+            resp_imgs = [imgs[r] for r in included_runs if r in runs]
+            resp_events = [events_shifted[r] for r in included_runs if r in runs]
+            resp_confounds = [confounds[r] for r in included_runs if r in runs]
+            if resp_imgs:
+                model.fit(resp_imgs, resp_events, resp_confounds)
+                for contrast in response_contrasts[self.task_label]:
+                    title = f'sub-{self.subject_label}_task-{self.task_label}_contrast-{contrast}_run-{igroup+1}'
+                    contrast_file = f'{self.out_path}/sub-{self.subject_label}/{title}.nii.gz' 
+                    stat_map = model.compute_contrast(contrast, output_type='effect_size')
+                    nib.save(stat_map, contrast_file)
     
     def run(self):
         if not os.path.exists(f'{self.out_path}/sub-{self.subject_label}'):
@@ -371,6 +352,8 @@ def main():
                          help='Task to run the GLM on')
     parser.add_argument('--space_label', type=str, default='MNI152NLin2009cAsym',
                          help='Space of the GLM')
+    parser.add_argument('--motion_mode', choices=['lenient', 'strict'], default='lenient',
+                         help='Motion filtering mode')
     parser.add_argument('--overwrite', action=argparse.BooleanOptionalAction, default=True)
     args = parser.parse_args()
 

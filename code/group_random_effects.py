@@ -13,6 +13,8 @@ import matplotlib.pyplot as plt
 from nilearn.glm import threshold_stats_img
 from nilearn.plotting import plot_contrast_matrix
 import nibabel as nib
+from utils.mri import check_motion_filtering
+
 
 class GroupRandomEffects:
     def __init__(self, args):
@@ -46,11 +48,21 @@ class GroupRandomEffects:
             with warnings.catch_warnings():
                 warnings.filterwarnings('ignore', category=DeprecationWarning)
                 confounds_filtered, sample_masks = load_confounds(files, strategy=('motion', 'scrub'), 
-                                                            fd_threshold=0.5, 
+                                                            fd_threshold=1, 
                                                             std_dvars_threshold=3, 
-                                                            scrub=5,
+                                                            scrub=0,
                                                             motion='basic')
             all_confounds.append(confounds_filtered)
+
+        # Check which runs exceed motion threshold
+        n_trs = nib.load(files[0]).shape[-1]
+        excluded_runs, included_runs = check_motion_filtering(sample_masks, n_trs,
+                                                                threshold=self.frame_threshold)
+        print(f'{len(excluded_runs)=}')
+        print(f'{len(included_runs)=}')
+        for i, m in enumerate(sample_masks):
+            if m is not None:
+                print(f'Run {i}: {len(m)=}/{n_trs=}')
         
         # Load model info from BIDS
         model_info = flfb(self.dataset_path,

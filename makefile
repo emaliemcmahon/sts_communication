@@ -32,21 +32,21 @@ group_runwise:
 	sbatch $(project_path)/code/batch_group_runwise.sh $(subs)
 
 # Define contrast arrays (space-separated lists in Make)
-COM1S := 0.25*face_third+0.25*face_first+0.25*com_phy+0.25*com_ind #\
-# 0.5*face_third+0.5*face_first 0.5*com_phy+0.5*com_ind \
-# com_phy com_ind face_third face_first \
-# 0.5*face_third+0.5*face_noncom body face_first
-COM2S := 0.33*face_noncom+0.33*phy+0.34*ind #\
-# face_noncom 0.5*phy+0.5*ind \
-# phy ind face_noncom face_noncom \
-# object object face_third
+COM1S := face_third+face_first+com_phy+com_ind \
+face_third+face_first com_phy+com_ind \
+com_phy com_ind face_third face_first \
+face_third+face_noncom body face_first
+COM2S := face_noncom+phy+ind \
+face_noncom phy+ind \
+phy ind face_noncom face_noncom \
+object object face_third
 communicate_random_effects:
 	@echo "Submitting random effects jobs..."
 	$(eval LENGTH := $(words $(COM1S)))
 	$(foreach i, $(shell seq 1 $(LENGTH)), \
 		$(eval C1 := $(word $(i),$(COM1S))) \
 		$(eval C2 := $(word $(i),$(COM2S))) \
-		sbatch $(project_path)/code/batch_random_effects.sh $(C1) $(C2) communicate; \
+		sbatch $(project_path)/code/batch_random_effects.sh $(C1) $(C2) communicate $(subs[@]); \
 		echo $(C1) $(C2); \
 	)
 
@@ -60,6 +60,6 @@ loc_random_effects:
 		$(eval C1 := $(word $(i),$(C1S))) \
 		$(eval C2 := $(word $(i),$(C2S))) \
 		$(eval TASK := $(word $(i),$(TASKS))) \
-		sbatch $(project_path)/code/batch_random_effects.sh $(C1) $(C2) $(TASK); \
+		sbatch $(project_path)/code/batch_random_effects.sh $(C1) $(C2) $(TASK) $(subs[@]); \
 		echo $(C1) $(C2) $(TASK); \
 	)

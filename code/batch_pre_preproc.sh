@@ -36,10 +36,10 @@ python code/rm_aborted_runs.py \
 
 #Copy the behavioral data to the current directory
 cp ${behavior_top}/sts_communication_experiment/data/subj0${par}/bids/* sub-${par}/ses-${ses}/func/
-python ${behavior_top}/tomloc/write_events_files.py \
+python ${behavior_top}/tomloc/write_event_files.py \
   --subj ${par} \
-  --behavioral_dir ${behavior_top}/tomloc/behavioural \
-  --bids_root ${scratch_top}
+  --behav-dir ${behavior_top}/tomloc/behavioural \
+  --bids-root ${scratch_top}
 python ${behavior_top}/point_light_social/para2bids.py \
   --input_subj sub-${par} \
   --output_subj ${par} \
