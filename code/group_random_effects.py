@@ -15,14 +15,12 @@ class GroupRandomEffects:
         self.process = 'GroupRandomEffects'
         self.dataset_path = args.dataset_path
         self.derivatives_path = f'{self.dataset_path}/derivatives'
-        self.glm_path = f'{self.derivatives_path}/NilearnGLMRunwise'
+        self.glm_path = f'{self.derivatives_path}/NilearnGLM'
         self.out_path = f'{self.derivatives_path}/{self.process}'
         self.condition_one = args.condition_one
         self.condition_two = args.condition_two
         self.contrast_name = f'{self.condition_one}-{self.condition_two}'
         self.task_label = args.task_label
-        self.alpha = 0.05
-        self.correction = 'fdr'
         
         # Find all subjects that have the contrast file
         self.effect_files = sorted(glob(f'{self.glm_path}/sub-*/task-{self.task_label}/contrast-{self.contrast_name}_effect-size.nii.gz'))

@@ -1,6 +1,7 @@
 import argparse
 import os
 import warnings
+from tqdm import tqdm
 from glob import glob
 from pathlib import Path
 import numpy as np
@@ -31,7 +32,7 @@ class NilearnGLM:
         self.dataset_path = args.dataset_path
         self.derivatives_path = f'{self.dataset_path}/derivatives'
         self.fmriprep_path = f'{self.derivatives_path}/fmriprep'
-        self.out_path = f'{self.derivatives_path}/NilearnGLMRunwise'
+        self.out_path = f'{self.derivatives_path}/NilearnGLM'
         self.task_label = args.task_label
         self.space_label = args.space_label
         self.sub_num = args.sub_num
@@ -85,7 +86,8 @@ class NilearnGLM:
         events = models_events[0]
         confounds = confounds_filtered
 
-        # Shift the time series because fMRIPrep slice time corrects to the middle volume
+        # Shift the time series because fMRIPrep slice time corrects to the middle volume 
+        # TR divided by half is 2s / 2 = 1s, so shift events by 1s to align with the corrected time series
         # https://reproducibility.stanford.edu/slice-timing-correction-in-fmriprep-and-linear-modeling/
         events_shifted = []
         for event in events: 
@@ -96,7 +98,7 @@ class NilearnGLM:
         model.fit(imgs, events_shifted, confounds)
 
         # Compute and save all contrasts
-        for c1, c2 in self.contrasts:
+        for c1, c2 in tqdm(self.contrasts, total=len(self.contrasts), desc='Computing contrasts'):
             contrast_name = f'{c1}-{c2}'
             contrast = parse_contrast(model, c1, c2)
             # Compute t-map and effect size map
