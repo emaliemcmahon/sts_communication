@@ -300,7 +300,7 @@ class GroupRunwiseResults:
                 contrast_df = roi_df[roi_df.trial_type.isin([c1, c2])].pivot(index='subject_label', columns='trial_type', values='response').dropna()
                 a = contrast_df[c1].to_numpy()
                 b = contrast_df[c2].to_numpy()
-                stats = ttest_rel(a, b)#, alternative='greater')
+                stats = ttest_rel(a, b, alternative='greater')
                 summary.append({'hemi': hemi, 'roi': roi,
                                 'c1': c1, 'c2': c2, 
                                 'diff': np.mean(a-b),

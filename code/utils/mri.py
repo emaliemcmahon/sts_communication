@@ -1,3 +1,23 @@
+from nilearn.datasets import load_fsaverage, load_fsaverage_data
+from nilearn.surface import SurfaceImage
+
+
+
+def vol2surf(stat_img):
+    fsaverage_meshes = load_fsaverage(mesh="fsaverage")
+    fsaverage_sulcal = load_fsaverage_data(
+        mesh="fsaverage",
+        data_type="sulcal",
+        mesh_type="inflated",
+    )
+
+    img = SurfaceImage.from_volume(
+        mesh=fsaverage_meshes["pial"],
+        volume_img=stat_img,
+    )
+    return img, fsaverage_meshes, fsaverage_sulcal
+
+
 def check_motion_filtering(sample_masks, n_trs, threshold=12, one_indexed=False):
     """
     Return a list of runs where more than `threshold` frames were removed.

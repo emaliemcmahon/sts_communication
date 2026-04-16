@@ -4,7 +4,7 @@ subs := 01 02 03 04 05 07 08 09 11 12 13 14 15 16 18 19 20 21 22 23
 tom_subs := 01 03 04 05 07 08 09 11 12 13 14 15 16 18 19 22 23
 
 # Steps to run
-all: preprocess rois first_level_runwise runwise_response group_runwise communicate_random_effects loc_random_effects
+all: preprocess rois first_level_runwise runwise_response group_runwise communicate_random_effects loc_random_effects plot_surfaces
 
 # Preprocess fMRI data with fRMIPrep
 preprocess:
@@ -62,4 +62,25 @@ loc_random_effects:
 		$(eval TASK := $(word $(i),$(TASKS))) \
 		sbatch $(project_path)/code/batch_random_effects.sh $(C1) $(C2) $(TASK); \
 		echo $(C1) $(C2) $(TASK); \
+	)
+
+
+CONS1 := face_third+face_first+com_phy+com_ind \
+face_third+face_first com_phy+com_ind \
+com_phy com_ind face_third face_first \
+face_third+face_noncom body face_first \
+belief interact
+CONS2 := face_noncom+phy+ind \
+face_noncom phy+ind \
+phy ind face_noncom face_noncom \
+object object face_third \
+photo noninteract
+plot_surfaces:
+	@echo "Submitting surface plotting jobs..."
+	$(eval LENGTH := $(words $(CONS1)))
+	$(foreach i, $(shell seq 1 $(LENGTH)), \
+		$(eval C1 := $(word $(i),$(CONS1))) \
+		$(eval C2 := $(word $(i),$(CONS2))) \
+		sbatch $(project_path)/code/batch_plot_surfaces.sh $(C1) $(C2); \
+		echo $(C1) $(C2); \
 	)
