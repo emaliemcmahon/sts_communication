@@ -1,5 +1,6 @@
 from nilearn.datasets import load_fsaverage, load_fsaverage_data
 from nilearn.surface import SurfaceImage
+import numpy as np
 
 
 
@@ -61,3 +62,57 @@ def check_motion_filtering(sample_masks, n_trs, threshold=12, one_indexed=False)
             good_runs.append(i + 1 if one_indexed else i)   
 
     return bad_runs, good_runs
+
+
+def parse_contrast(model, c1, c2):
+    """
+    Parse contrast strings and build contrast vector for GLM.
+
+    Parameters
+    ----------
+    model : FirstLevelModel
+        The fitted first-level GLM model.
+    c1 : str
+        Condition string for positive contrast (e.g., 'face_third+face_first').
+    c2 : str
+        Condition string for negative contrast (e.g., 'face_noncom').
+
+    Returns
+    -------
+    numpy.ndarray
+        Contrast vector with weights for each regressor.
+    """
+    columns = list(model.design_matrices_[0].columns)
+    contrast = np.zeros(len(columns))
+
+    # Parse condition one (positive weights)
+    cond1_averaging = c1.split('+')
+    for c in cond1_averaging:
+        c = c.strip()
+        if '*' in c:
+            # Parse weighted contrast
+            weight, cond = c.split('*')
+            weight = float(weight.strip())
+            cond = cond.strip()
+        else:
+            # No weight specified, use equal weighting
+            weight = 1/len(cond1_averaging)
+            cond = c
+        contrast[columns.index(cond)] = weight
+
+    # Parse condition two (negative weights)
+    cond2_averaging = c2.split('+')
+    for c in cond2_averaging:
+        c = c.strip()
+        if '*' in c:
+            # Parse weighted contrast
+            weight, cond = c.split('*')
+            weight = float(weight.strip())
+            cond = cond.strip()
+        else:
+            # No weight specified, use equal weighting
+            weight = 1/len(cond2_averaging)
+            cond = c
+        contrast[columns.index(cond)] = -weight
+
+    return contrast

@@ -4,7 +4,7 @@ subs := 01 02 03 04 05 07 08 09 11 12 13 14 15 16 18 19 20 21 22 23
 tom_subs := 01 03 04 05 07 08 09 11 12 13 14 15 16 18 19 22 23
 
 # Steps to run
-all: preprocess rois first_level_runwise runwise_response group_runwise communicate_random_effects loc_random_effects plot_surfaces
+all: preprocess rois first_level_runwise runwise_response group_runwise first_level_models communicate_random_effects loc_random_effects surface_plots
 
 # Preprocess fMRI data with fRMIPrep
 preprocess:
@@ -16,11 +16,11 @@ preprocess:
 # Define the runwise ROIs and responses
 first_level_runwise: 
 	for s in $(subs); do \
-		sbatch $(project_path)/code/batch_runwise_glm.sh "$$s" pointlight; \
-		sbatch $(project_path)/code/batch_runwise_glm.sh "$$s" communicate; \
+		sbatch $(project_path)/code/batch_nilearn_glm.sh "$$s" pointlight; \
+		sbatch $(project_path)/code/batch_nilearn_glm.sh "$$s" communicate; \
 	done
 	for s in $(tom_subs); do \
-		sbatch $(project_path)/code/batch_runwise_glm.sh "$$s" tom; \
+		sbatch $(project_path)/code/batch_nilearn_glm.sh "$$s" tom; \
 	done
 
 runwise_response:
@@ -30,6 +30,15 @@ runwise_response:
 
 group_runwise:
 	sbatch $(project_path)/code/batch_group_runwise.sh $(subs)
+
+first_level_models: 
+	for s in $(subs); do \
+		sbatch $(project_path)/code/batch_nilearn_glm.sh "$$s" pointlight; \
+		sbatch $(project_path)/code/batch_nilearn_glm.sh "$$s" communicate; \
+	done
+	for s in $(tom_subs); do \
+		sbatch $(project_path)/code/batch_nilearn_glm.sh "$$s" tom; \
+	done
 
 # Define contrast arrays (space-separated lists in Make)
 COM1S := face_third+face_first+com_phy+com_ind \
@@ -75,7 +84,7 @@ face_noncom phy+ind \
 phy ind face_noncom face_noncom \
 object object face_third \
 photo noninteract
-plot_surfaces:
+surface_plots:
 	@echo "Submitting surface plotting jobs..."
 	$(eval LENGTH := $(words $(CONS1)))
 	$(foreach i, $(shell seq 1 $(LENGTH)), \

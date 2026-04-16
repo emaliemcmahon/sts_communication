@@ -18,22 +18,25 @@ class PlotSurfaces:
         self.condition_two = args.condition_two
         self.alpha = args.alpha
         self.correction = args.correction
-        self.two_sided = args.two_sided
+        if self.correction is not None:
+            self.alpha = 0.05
+            print(f"Using correction method '{self.correction}' with alpha set to 0.05 for thresholding.")
+        # else: alpha is set from args, assumed to be the threshold value
         self.palette = sns.color_palette(args.palette_name, as_cmap=True)
         self.threshold = None
         self.file_name = f'contrast-{self.condition_one}-{self.condition_two}_stat-tmap.nii.gz'
         self.dataset_path = args.dataset_path
         self.data_top_dir = os.path.join(self.dataset_path, 'derivatives')
-        self.data_path = os.path.join(self.data_top_dir, 'GroupRandomEffects', 'sub-group')
-        self.outpath = os.path.join(self.data_top_dir, 'SurfacePlots')
+        self.random_effects_dir = os.path.join(self.data_top_dir, 'GroupRandomEffects', 'sub-group')
+        correction_dir = self.correction if self.correction else 'uncorrected'
+        self.outpath = os.path.join(self.data_top_dir, 'SurfacePlots', correction_dir)
         Path(self.outpath).mkdir(exist_ok=True, parents=True)
 
     def load_and_threshold_stat_img(self, file):
-        stat_img = nib.load(os.path.join(self.data_path, file))
-        tmap = nib.load(os.path.join(self.data_path, file))
+        tmap = nib.load(os.path.join(self.random_effects_dir, file))
         stat_img, threshold = threshold_stats_img(tmap, alpha=self.alpha, 
                                                 height_control=self.correction, 
-                                                two_sided=self.two_sided)
+                                                two_sided=False)
         self.threshold = threshold
         return stat_img
 
@@ -92,8 +95,6 @@ def main():
                          help='Alpha level for thresholding')
     parser.add_argument('--correction', type=str, default='bonferroni',
                          help='Multiple comparison correction method')
-    parser.add_argument('--two_sided', action=argparse.BooleanOptionalAction, default=False,
-                         help='Whether to perform a two-sided test')
     parser.add_argument('--palette_name', type=str, default='Reds',
                          help='Seaborn color palette name')
     args = parser.parse_args()
