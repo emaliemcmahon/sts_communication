@@ -71,7 +71,7 @@ class NilearnGLM:
                           slice_time_ref=None,  # Load from the BIDS data
                           smoothing_fwhm=5.0,
                           img_filters=[("desc", "preproc")],
-                          confounds_strategy=("motion"),
+                          confounds_strategy=("motion",),
                           confounds_motion="basic",
                           derivatives_folder=self.fmriprep_path,
                           minimize_memory=True, 

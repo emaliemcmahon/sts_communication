@@ -121,7 +121,7 @@ class NilearnGLMRunwise:
                             derivatives_folder=self.fmriprep_path,
                             minimize_memory=False, 
                             hrf_model='spm',
-                            confounds_strategy=("motion"),
+                            confounds_strategy=("motion",),
                             confounds_motion="basic",
                             n_jobs=-1)        
         model, imgs, events, confounds = info2vars(model_info)
