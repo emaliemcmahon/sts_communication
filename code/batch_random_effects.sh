@@ -1,35 +1,35 @@
 #!/bin/bash -l
 
 #SBATCH --job-name=random_effects
-#SBATCH --partition=mit_normal
-#SBATCH --time=3:00:00
+#SBATCH --partition=ou_bcs_normal
+#SBATCH --time=1:00:00
 #SBATCH --mem-per-cpu=4GB
 #SBATCH --cpus-per-task=16
 #SBATCH --output=logs/%x_%A.out
-
-# c1s=(com_phy com_ind face_first face_first face_third face_first+face_third com_phy+com_ind face_noncom+face_third body)
-# c2s=(phy ind face_noncom face_third face_noncom face_noncom phy+ind object object)
-# length=${#c1s[@]}
-# for ((i=0; i<length; i++)); do sbatch batch_random_effects.sh ${c1s[$i]} ${c2s[$i]}; done
-
-conda activate nilearn
 
 c1=$1
 c2=$2
 task=$3
 
-subs=(01 02 03 04 05 07 08 09 11 12 13 14 15 16 18 19 20 21 22 23)
-tom_subs=(01 03 04 05 07 08 09 11 12 13 14 15 16 18 19 22 23)
+USER=$(whoami)
+top_dir="/orcd/data/ngk/001/users/${USER}/sts_communication"
 
-if [ "$task" == "tom" ]; then
-    selected_subs=("${tom_subs[@]}")
-else
-    selected_subs=("${subs[@]}")
-fi
+echo "Top dir: ${top_dir}"
+echo "Starting script with c1=$c1, c2=$c2, and task=$task"
 
-echo "$c1 $c2"
-echo "$task"
-echo "${selected_subs[@]}"
+# Initialize Conda (adjust path if needed)
+source ~/.bashrc
 
-python code/group_random_effects.py "${selected_subs[@]}" \
-    -c1 $c1 -c2 $c2 -t $task
+# Activate environment
+conda activate nilearn || { echo "Failed to activate conda env"; exit 1; }
+
+# Debug info
+echo "Using python: $(which python)"
+python --version
+
+python ${top_dir}/code/group_random_effects.py \
+    -c1 $c1 -c2 $c2 -t $task || { echo "Python script failed"; exit 1; }
+python ${top_dir}/code/plot_surfaces.py \
+    -c1 $c1 -c2 $c2 -t $task || { echo "Plotting script failed"; exit 1; }
+
+echo "Script completed"

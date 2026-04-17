@@ -1,18 +1,13 @@
 import os
-import warnings
 import argparse
 from glob import glob
 from pathlib import Path
 from nilearn.glm.first_level import first_level_from_bids as flfb
-from nilearn.interfaces.fmriprep import load_confounds
 import nibabel as nib
 from tqdm import tqdm
 from nilearn.masking import intersect_masks
-from nilearn.plotting import plot_glass_brain
-import numpy as np
-import matplotlib.pyplot as plt
 from itertools import product
-from utils.mri import check_motion_filtering
+from utils.mri import info2vars, selective_mask_img
 
 
 n_groups = {'pointlight': 4, 'tom': 2, 'communicate': 9}
@@ -55,13 +50,6 @@ def roi_switcher(roi):
         return roi
 
 
-def info2vars(model_info):
-    (models, imgs, events, confounds) = model_info
-    return models[0], imgs[0], events[0], confounds[0]
-
-
-
-
 def split_into_groups(items, n_groups=3):
     return [items[i::n_groups] for i in range(n_groups)]
 
@@ -92,121 +80,6 @@ def hyphen_to_camel_case(contrast_name):
     return out
 
 
-def selective_mask_img(mask_file, img_file, keep_prop=0.1, debug_output=None):
-    """
-    Create a new mask by selecting top positive voxels within a parcel.
-    Number of voxels to keep is based on total parcel size.
-    
-    Args:
-        mask_file: Path to binary mask NIfTI file
-        img_file: Path to reference image NIfTI file
-        keep_prop: Proportion of total parcel voxels to keep (0-1)
-        debug_output: Path to save debug plots (None to skip saving)
-        
-    Returns:
-        New NIfTI image with selected voxels
-    """
-    # Load data with sanity checks
-    mask = nib.load(mask_file)
-    img = nib.load(img_file)
-    
-    print("\n=== INPUT VALIDATION ===")
-    print(f"Image shape: {img.shape} | Mask shape: {mask.shape}")
-    
-    if img.shape != mask.shape:
-        raise ValueError("Image and mask must have identical dimensions")
-    
-    # Initialize debug plot if needed
-    if debug_output is not None:
-        fig, axes = plt.subplots(2, 2, figsize=(15, 10))
-        plot_glass_brain(img, title="Original Image", 
-                        axes=axes[0,0], 
-                        plot_abs=False,
-                        colorbar=True)
-        plot_glass_brain(mask, title="Original Mask", axes=axes[0,1])
-    
-    # Get data arrays
-    mask_data = mask.get_fdata()
-    img_data = img.get_fdata()
-    
-    # Check mask is binary
-    unique_mask_vals = np.unique(mask_data)
-    print(f"\n=== MASK VALIDATION ===")
-    print(f"Unique mask values: {unique_mask_vals}")
-    
-    if len(unique_mask_vals) > 2:
-        print("WARNING: Mask appears non-binary - thresholding at 0.5")
-        mask_data = (mask_data > 0.5).astype(np.int8)
-    
-    # Calculate parcel information
-    parcel_size = np.sum(mask_data > 0)
-    voxels_to_keep = int(parcel_size * keep_prop)
-    
-    print(f"\n=== VOXEL SELECTION ===")
-    print(f"Parcel size: {parcel_size} voxels")
-    print(f"Attempting to select top {voxels_to_keep} positive voxels ({keep_prop*100:.1f}% of parcel)")
-    
-    if voxels_to_keep == 0:
-        raise ValueError("No voxels to select - check your mask and keep_prop")
-    
-    # Get positive voxels within mask
-    positive_voxels_mask = (mask_data > 0) & (img_data > 0)
-    positive_voxel_indices = np.where(positive_voxels_mask.flatten())[0]
-    positive_voxel_values = img_data.flatten()[positive_voxel_indices]
-    
-    print(f"Found {len(positive_voxel_values)} positive voxels in parcel")
-    print(f"Response range: {np.min(positive_voxel_values):.2f} to {np.max(positive_voxel_values):.2f}")
-    
-    # Determine how many we can actually select (up to voxels_to_keep)
-    actual_voxels_to_select = min(voxels_to_keep, len(positive_voxel_values))
-    
-    if actual_voxels_to_select < voxels_to_keep:
-        print(f"WARNING: Only selecting {actual_voxels_to_select} voxels (not enough positive values)")
-    
-    # Select top voxels
-    if actual_voxels_to_select > 0:
-        sorted_indices = np.argsort(positive_voxel_values)[::-1][:actual_voxels_to_select]
-        selected_flat_indices = positive_voxel_indices[sorted_indices]
-    else:
-        selected_flat_indices = np.array([], dtype=int)
-    
-    # Create new mask
-    new_mask_flat = np.zeros(img_data.size)
-    new_mask_flat[selected_flat_indices] = 1
-    new_mask = new_mask_flat.reshape(img_data.shape)
-    
-    # Verification
-    actual_voxels_kept = np.sum(new_mask)
-    print(f"\n=== VERIFICATION ===")
-    print(f"Requested voxels: {voxels_to_keep} | Selected voxels: {actual_voxels_kept}")
-    
-    # Create output image
-    output_img = nib.Nifti1Image(new_mask.astype(np.int8), img.affine)
-    
-    # Visualize results
-    if debug_output is not None:
-        plot_glass_brain(output_img, 
-                        title=f"Selected {actual_voxels_kept} voxels", 
-                        axes=axes[1,0])
-        
-        # Plot histogram
-        axes[1,1].hist(positive_voxel_values, bins=50, alpha=0.7, label='All positive voxels')
-        if actual_voxels_to_select > 0:
-            selected_values = positive_voxel_values[sorted_indices]
-            axes[1,1].hist(selected_values, bins=50, alpha=0.7, 
-                          label='Selected voxels', color='red')
-        axes[1,1].set_title("Response Value Distribution")
-        axes[1,1].legend()
-        axes[1,1].set_xlabel("Response value")
-        axes[1,1].set_ylabel("Count")
-        
-        plt.tight_layout()
-        plt.savefig(debug_output)
-        plt.close()
-    
-    return output_img
-
-
 class NilearnGLMRunwise:
     def __init__(self, args):
         self.process = 'NilearnGLMRunwise'
@@ -235,40 +108,7 @@ class NilearnGLMRunwise:
 
     def glm(self):
         mask = self.load_mask()
-
-        files = sorted(glob(f'{self.fmriprep_path}/sub-{self.subject_label}/ses-*/func/*{self.task_label}*{self.space_label}*bold.nii.gz'))
-        print(files)
         
-        # Load confounds with motion filtering strategy to get sample_masks
-        with warnings.catch_warnings():
-            warnings.filterwarnings('ignore', category=DeprecationWarning)
-            if self.motion_mode == 'lenient':
-                confounds_filtered, sample_masks = load_confounds(files, strategy=('motion', 'scrub'), 
-                                                            fd_threshold=1, 
-                                                            std_dvars_threshold=3, 
-                                                            scrub=0,
-                                                            motion='basic')
-            else:  # strict
-                confounds_filtered, sample_masks = load_confounds(files, strategy=('motion', 'scrub'), 
-                                                            fd_threshold=0.5, 
-                                                            std_dvars_threshold=1.5, 
-                                                            scrub=5,
-                                                            motion='basic')
-
-        # Check which runs exceed motion threshold
-        n_trs = nib.load(files[0]).shape[-1]
-        excluded_runs, included_runs = check_motion_filtering(sample_masks, n_trs,
-                                                                threshold=self.frame_threshold)
-        print(f'{len(excluded_runs)=}')
-        print(f'{len(included_runs)=}')
-        for i, m in enumerate(sample_masks):
-            if m is not None:
-                print(f'Run {i}: {len(m)=}/{n_trs=}')
-
-        if self.motion_mode == 'strict' and len(excluded_runs) >= 3:
-            print(f"Too many excluded runs ({len(excluded_runs)}), skipping analysis for subject {self.subject_label}")
-            return
-
         # Load model with first_level_from_bids but use our filtered confounds
         model_info = flfb(self.dataset_path,
                             self.task_label,
@@ -281,11 +121,10 @@ class NilearnGLMRunwise:
                             derivatives_folder=self.fmriprep_path,
                             minimize_memory=False, 
                             hrf_model='spm',
-                            n_jobs=-1)
-        
-        # Get model, imgs, and events from BIDS, but use our confounds_filtered
-        model, imgs, events, _ = info2vars(model_info)
-        confounds = confounds_filtered
+                            confounds_strategy=("motion"),
+                            confounds_motion="basic",
+                            n_jobs=-1)        
+        model, imgs, events, confounds = info2vars(model_info)
 
         # Shift the time series because fMRIPrep slice time corrects to the middle volume
         # https://reproducibility.stanford.edu/slice-timing-correction-in-fmriprep-and-linear-modeling/
@@ -294,14 +133,15 @@ class NilearnGLMRunwise:
             event['onset'] = event['onset'] + 1
             events_shifted.append(event)
 
-        n_groups_eff = min(n_groups[self.task_label], len(included_runs))
-        run_groups = split_into_groups(included_runs, n_groups=n_groups_eff)
+        runs = [i for i in range(len(imgs))]
+        n_groups_eff = min(n_groups[self.task_label], len(imgs))
+        run_groups = split_into_groups(runs, n_groups=n_groups_eff)
         for igroup, runs in tqdm(enumerate(run_groups),
                                  total=n_groups_eff, desc='fitting run groups'):
             # Compute the model and contrasts to define the fROIs
-            froi_imgs = [imgs[r] for r in included_runs if r not in runs]
-            froi_events = [events_shifted[r] for r in included_runs if r not in runs]
-            froi_confounds = [confounds[r] for r in included_runs if r not in runs]
+            froi_imgs = [imgs[r] for r in runs if r not in runs]
+            froi_events = [events_shifted[r] for r in runs if r not in runs]
+            froi_confounds = [confounds[r] for r in runs if r not in runs]
             if froi_imgs:
                 model.fit(froi_imgs, froi_events, froi_confounds)
                 for contrast in froi_contrasts[self.task_label].keys():
@@ -320,9 +160,9 @@ class NilearnGLMRunwise:
                         nib.save(new_mask, f'{output_file}.nii.gz')
 
             # Compute the model and contrasts to estimate the responses
-            resp_imgs = [imgs[r] for r in included_runs if r in runs]
-            resp_events = [events_shifted[r] for r in included_runs if r in runs]
-            resp_confounds = [confounds[r] for r in included_runs if r in runs]
+            resp_imgs = [imgs[r] for r in runs if r in runs]
+            resp_events = [events_shifted[r] for r in runs if r in runs]
+            resp_confounds = [confounds[r] for r in runs if r in runs]
             if resp_imgs:
                 model.fit(resp_imgs, resp_events, resp_confounds)
                 for contrast in response_contrasts[self.task_label]:
@@ -341,6 +181,7 @@ class NilearnGLMRunwise:
                 self.glm()
             else:
                 print('Output already exists. To re-run pass --overwrite')
+
 
 def main():
     parser = argparse.ArgumentParser(description='Run a standard first-level GLM on the localizer tasks')

@@ -6,6 +6,7 @@
 #SBATCH --mem-per-cpu=4GB
 #SBATCH --cpus-per-task=8
 #SBATCH --output=logs/%x_%A.out
+#SBATCH --exclude=node3806,node3909,node3908
 
 sub=$1
 task=$2
@@ -28,7 +29,7 @@ conda activate nilearn || { echo "Failed to activate conda env"; exit 1; }
 echo "Using python: $(which python)"
 python --version
 
-python ${top_dir}/code/nilearn_glm.py $sub \
+python ${top_dir}/code/nilearn_glm.py -s $sub \
 -t $task || { echo "Python script failed"; exit 1; }
 
 echo "Script completed"

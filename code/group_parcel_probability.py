@@ -6,9 +6,18 @@ from tqdm import tqdm
 from pathlib import Path
 import numpy as np
 import nibabel as nib
+import matplotlib.pyplot as plt
+from nilearn.plotting import plot_surf_stat_map
+from nilearn.datasets import load_fsaverage, load_fsaverage_data
+from nilearn.surface import SurfaceImage
+from nilearn.image import smooth_img
+from utils.mri import vol2surf
 
-parcel_name = {'communicate': {'face_third+face_first+com_phy+com_ind-face_noncom+phy+ind': 'communication_parcel'},
-               'pointlight': {'interact-noninteract': 'social_interact_parcel'}}
+parcel_name = {'communicate': {'face_third+face_first+com_phy+com_ind-face_noncom+phy+ind': 'communication_parcel',
+                               'face_third+face_noncom-object': 'face_parcel',
+                               'body-object': 'body_parcel'},
+               'pointlight': {'interact-noninteract': 'social_interact_parcel'},
+               'tom': {'belief-photo': 'tom_parcel'}}
 
 class GroupParcelProbability:
     def __init__(self, args):
@@ -31,7 +40,52 @@ class GroupParcelProbability:
         
         print(f'Found {len(self.mask_files)} subjects with mask for contrast {self.contrast_name} for task {self.task_label}: {self.subjs}')
         print(f'Using parcel name: {self.parcel_name}')
-        Path(f'{self.out_path}/sub-group').mkdir(parents=True, exist_ok=True)
+        Path(f'{self.out_path}').mkdir(parents=True, exist_ok=True)
+
+    def plot_surface(self, prob_img):
+        """Plot the probability map on the right lateral surface"""
+        print('Creating surface plot for right hemisphere...')
+        
+        # Convert volume to surface
+        fsaverage_meshes = load_fsaverage(mesh="fsaverage")
+        fsaverage_sulcal = load_fsaverage_data(
+            mesh="fsaverage",
+            data_type="sulcal",
+            mesh_type="inflated",
+        )
+        
+    def plot_surface(self, img, threshold=0.1, cmap='hot', ylabel='Probability', filename_suffix='surface_right'):
+        """Plot the image on the right lateral surface"""
+        print(f'Creating surface plot for {ylabel.lower()} (right hemisphere)...')
+        surf_img, fsaverage_meshes, fsaverage_sulcal = vol2surf(img)  # Ensure img is in the correct format for surface plotting
+
+        # Plot right lateral surface
+        fig = plot_surf_stat_map(
+            stat_map=surf_img,
+            surf_mesh=fsaverage_meshes["inflated"],
+            hemi='right',
+            threshold=threshold,
+            bg_map=fsaverage_sulcal,
+            darkness=None,
+            cmap=cmap,
+            vmax=img.get_fdata().max() if ylabel == 'Probability' else None
+        )
+        
+        # Add colorbar label
+        cbar = fig.axes[-1]
+        cbar.set_ylabel(ylabel, rotation=270, labelpad=20)
+        
+        # Make background transparent
+        fig.patch.set_alpha(0)
+        for ax in fig.axes:
+            ax.patch.set_alpha(0)
+        
+        # Save the plot
+        plot_path = f'{self.out_path}/{self.parcel_name}_{filename_suffix}.png'
+        fig.savefig(plot_path, transparent=True, dpi=300, bbox_inches='tight')
+        plt.close(fig)
+        
+        print(f'Saved surface plot: {plot_path}')
 
     def create_probability_maps(self):
         print('Creating probability maps...')
@@ -52,6 +106,7 @@ class GroupParcelProbability:
         # Sum all masks
         for mask_file in tqdm(self.mask_files, desc='Summing masks'):
             mask_img = nib.load(mask_file)
+            # mask_img = smooth_img(mask_img, fwhm=20)
             mask_data = mask_img.get_fdata()
             mask_sum += mask_data
         
@@ -66,12 +121,16 @@ class GroupParcelProbability:
         thresh_img = nib.Nifti1Image(thresholded_mask, affine)
         
         # Save results
-        nib.save(prob_img, f'{self.out_path}/sub-group/{self.parcel_name}_probability.nii.gz')
-        nib.save(thresh_img, f'{self.out_path}/sub-group/{self.parcel_name}_mask-thresholded.nii.gz')
+        nib.save(prob_img, f'{self.out_path}/{self.parcel_name}_probability.nii.gz')
+        nib.save(thresh_img, f'{self.out_path}/{self.parcel_name}_mask-thresholded.nii.gz')
         
         print(f'Saved probability map and thresholded mask for {self.parcel_name}')
         print(f'Probability map range: {probability_map.min():.3f} - {probability_map.max():.3f}')
         print(f'Number of voxels in thresholded mask: {thresholded_mask.sum()}')
+        
+        # Create surface plot
+        self.plot_surface(prob_img)
+        self.plot_surface(thresh_img, threshold=0.5, cmap='Reds', ylabel='Mask', filename_suffix='mask_surface_right')
 
 
 def main():
