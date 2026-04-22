@@ -75,7 +75,8 @@ class GroupRunwiseResults:
                                     'belief', 'photo']
         self.hemis = ['l', 'r']
         self.rois = ['EVC', 'MT', 'FFA', 'EBA', 
-                     'fSTS', 'SI-STS', 'TPJ', 'facecom-STS', 'dyadcom-STS', 
+                     'fSTS', 'SI-STS', 'TPJ', 'com-STS', 
+                     'facecom-STS', 'dyadcom-STS',
                      'comind-STS', 'comphy-STS', 'phy-STS']
         Path(self.out_path).mkdir(exist_ok=True, parents=True)
 
@@ -149,7 +150,7 @@ class GroupRunwiseResults:
         fig.savefig(f'{self.out_path}/{hemi}h_summary.pdf')
 
     def plot_individual_rois(self, df, stats, hemi='r', 
-                            rois=['fSTS', 'SI-STS', 'facecom-STS', 'dyadcom-STS', 
+                            rois=['fSTS', 'SI-STS', #'com-STS', 
                                   'comind-STS', 'comphy-STS', 'FFA', 'phy-STS']):
         sns.set_context('poster')
         
@@ -274,7 +275,7 @@ class GroupRunwiseResults:
             if stats_pos:
                 ax.set_ylim([0, max(stats_pos)+(max(error_max)*0.15)])
             else:
-                ax.set_ylim([0, ax.get_ylim()[-1]])
+                ax.set_ylim([0, max(error_max)*0.15])
 
             ax.spines['right'].set_visible(False)
             ax.spines['top'].set_visible(False)
@@ -283,6 +284,7 @@ class GroupRunwiseResults:
             # plt.title(f'{roi} - {hemi} hemisphere')
             fig.tight_layout()
             fig.savefig(f'{self.out_path}/roi-{roi}_hemi-{hemi}h.pdf')
+            plt.close(fig)
 
     def load_data(self):
         df = []
@@ -334,7 +336,7 @@ class GroupRunwiseResults:
                                             categories=self.subjs)
         for hemi in ['l', 'r']:
             self.plot_roi_summary(mean_df, summary, hemi=hemi)  
-            self.plot_individual_rois(mean_df, summary, hemi=hemi)
+            self.plot_individual_rois(mean_df, summary, hemi=hemi, rois=self.rois)
 
 def main():
     parser = argparse.ArgumentParser()

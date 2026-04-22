@@ -45,12 +45,12 @@ class NilearnGLM:
         print(vars(self))
         Path(f'{self.out_path}/sub-{self.subj}/task-{self.task_label}').mkdir(parents=True, exist_ok=True)
 
-    def save_map_for_parcel(self, zmap, contrast_name):
-        # Create mask: positive contrast with p < 0.001 uncorrected
-        thresholded, _ = threshold_stats_img(zmap, alpha=0.001, 
+    def save_map_for_parcel(self, tmap, contrast_name):
+        # Create mask: positive contrast with p < 0.05 uncorrected
+        thresholded, _ = threshold_stats_img(tmap, alpha=0.05, 
                                                 height_control=None, two_sided=False)
         mask_data = np.where(thresholded.get_fdata() > 0, 1, 0).astype(np.int32)
-        mask_img = nib.Nifti1Image(mask_data, zmap.affine)
+        mask_img = nib.Nifti1Image(mask_data, tmap.affine)
         nib.save(mask_img, f'{self.out_path}/sub-{self.subj}/task-{self.task_label}/contrast-{contrast_name}_mask.nii.gz')
 
     def load_mask(self):

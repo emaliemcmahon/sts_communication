@@ -21,14 +21,15 @@ roi_size = {'EVC': 0.05, 'MT': 0.1,
             'comphy-STS': 0.05,
             'facecom-STS': 0.05,
             'dyadcom-STS': 0.05,
+            'com-STS': .05,
             'phy-STS': .05,
             'FFA': .1, 'fSTS': .1, 
             'EBA': .1, 'SI-STS': .05,
             'TPJ': .1}
 
 task_rois = {'communicate': ['EVC', 'MT', 'FFA', 'EBA', 'fSTS',
-                             'comindSTS', 'comphySTS', 'facecomSTS', 
-                             'dyadcomSTS', 'phySTS'],
+                             'comind-STS', 'comphy-STS', 'facecom-STS', 
+                             'dyadcom-STS', 'com-STS', 'phy-STS'],
              'pointlight': ['SI-STS'],
              'tom': ['TPJ']}
 
@@ -37,89 +38,6 @@ task_conditions = {'communicate': ['object', 'body',
                                    'com_phy', 'phy', 'com_ind', 'ind'],
                    'pointlight': ['interact', 'noninteract'],
                    'tom': ['belief', 'photo']}
-
-roi_parc = {'dyad-comSTS': 'anatSTS',
-            'comind-STS': 'anatSTS',
-            'comphy-STS': 'anatSTS',
-            'facecom-STS': 'anatSTS',
-            'SI-STS': 'anatSTS', 
-            'phy-STS': 'anatSTS'}
-
-
-def roi_switcher(roi):
-    if roi in list(roi_parc.keys()):
-        return roi_parc[roi]
-    else:
-        return roi
-
-
-def list_of_dict_mean(list_of_dicts):
-    # Initialize a dictionary to hold the sum and count for each key
-    sum_dict = {}
-    count_dict = {}
-
-    # Iterate through each dictionary in the list
-    for d in list_of_dicts:
-        for key, val in d.items():
-            if key not in sum_dict:
-                sum_dict[key] = np.zeros_like(val)
-                count_dict[key] = 0
-            sum_dict[key] += val
-            count_dict[key] += 1
-
-    # Compute the mean for each key
-    return {key: sum_dict[key] / count_dict[key] for key in sum_dict}
-
-
-def count_overlaps(dictionary):
-    # Convert numpy arrays to sets of elements for each key
-    sets = {key: set(arr) for key, arr in dictionary.items()}
-    
-    # Get all unique pairs of keys
-    key_pairs = combinations(dictionary.keys(), 2)
-    
-    # Compute overlaps for each pair
-    long_data = []
-    for key1, key2 in key_pairs:
-        intersection = sets[key1] & sets[key2]
-        long_data.append({'roi1': key1, 'roi2': key2, 'overlap': len(intersection)})
-    
-    return pd.DataFrame(long_data)
-
-
-def remove_overlapping_values(original_dict, regions_to_filter):
-    """
-    Removes values from the arrays of specified regions that overlap with any other region in the dictionary.
-    
-    Parameters:
-    - original_dict: dict where keys are regions and values are numpy arrays
-    - regions_to_filter: list of regions to filter overlaps from
-    
-    Returns:
-    - A new dictionary with overlapping values removed from the specified regions
-    """
-    # Create a copy of the original dictionary to avoid modifying it directly
-    filtered_dict = {k: np.copy(v) for k, v in original_dict.items()}
-    
-    for region in regions_to_filter:
-        if region not in filtered_dict:
-            continue  # Skip if region not in dictionary
-        
-        # Collect all values from other regions (including those in regions_to_filter except current region)
-        other_values = set()
-        for other_region, arr in original_dict.items():
-            if other_region != region:
-                other_values.update(arr)
-        
-        # Convert to numpy array for efficient operations
-        other_values_arr = np.array(list(other_values)) if other_values else np.array([])
-        
-        # Remove overlapping values from the current region
-        original_arr = filtered_dict[region]
-        mask = ~np.isin(original_arr, other_values_arr)
-        filtered_dict[region] = original_arr[mask]
-    
-    return filtered_dict
 
 
 class RunwiseResponse:
@@ -173,8 +91,8 @@ class RunwiseResponse:
         """Load ROI mask for a specific run and return voxel indices."""
         roi_file = f'{self.glm_path}/sub-{self.subject_label}_run-{run+1}_{hemi}{roi}.nii.gz'
         if not os.path.exists(roi_file):
-            print(f"Looking for ROI file: {roi_file}")
-            print(f"ROI file not found: {roi_file}")
+            # print(f"Looking for ROI file: {roi_file}")
+            # print(f"ROI file not found: {roi_file}")
             return None
         
         roi_mask = nib.load(roi_file).get_fdata().flatten()
@@ -196,7 +114,7 @@ class RunwiseResponse:
         for hemi in self.hemis:
             for run in range(n_runs[task]):
                 voxels = self.load_roi_mask(run, hemi, roi)
-                print(f"Loading ROI {roi}, run {run+1}, hemi {hemi}: {'Found' if voxels is not None else 'Not Found'}")
+                # print(f"Loading ROI {roi}, run {run+1}, hemi {hemi}: {'Found' if voxels is not None else 'Not Found'}")
                 if voxels is None:
                     continue
                 
@@ -223,7 +141,7 @@ class RunwiseResponse:
             for hemi in self.hemis:
                 for run in range(n_runs[other_task]):
                     voxels = self.load_roi_mask(run, hemi, roi)
-                    print(f"Loading ROI {roi} for task {other_task}, run {run+1}, hemi {hemi}: {'Found' if voxels is not None else 'Not Found'}")
+                    # print(f"Loading ROI {roi} for task {other_task}, run {run+1}, hemi {hemi}: {'Found' if voxels is not None else 'Not Found'}")
                     if voxels is None:
                         continue
                     
@@ -247,7 +165,7 @@ class RunwiseResponse:
         
         for roi in self.rois:
             for task in self.tasks:
-                print(f"Processing Task: {task}")
+                # print(f"Processing Task: {task}")
                 if roi in task_rois[task]:
                     # ROI is defined in this task - use this task's data
                     roi_data = self.process_roi_in_defining_task(responses, roi, task)
@@ -300,7 +218,6 @@ class RunwiseResponse:
     def run(self):
         responses = self.load_responses()
         roi_response = self.get_roi_response(responses)
-        # roi_response.to_csv(self.out_file, index=False)
         roi_response.groupby(['hemi', 'roi', 'trial_type']).mean(numeric_only=True).reset_index().to_csv(self.out_file, index=False)
 
         roi_response = roi_response.loc[roi_response['trial_type'].isin(self.plotting_conditions)].reset_index(drop=True)

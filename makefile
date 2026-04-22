@@ -16,11 +16,11 @@ preprocess:
 # Define the runwise ROIs and responses
 first_level_runwise: 
 	for s in $(subs); do \
-		sbatch $(project_path)/code/batch_nilearn_glm.sh "$$s" pointlight; \
-		sbatch $(project_path)/code/batch_nilearn_glm.sh "$$s" communicate; \
+		sbatch $(project_path)/code/batch_runwise_glm.sh "$$s" pointlight; \
+		sbatch $(project_path)/code/batch_runwise_glm.sh "$$s" communicate; \
 	done
 	for s in $(tom_subs); do \
-		sbatch $(project_path)/code/batch_nilearn_glm.sh "$$s" tom; \
+		sbatch $(project_path)/code/batch_runwise_glm.sh "$$s" tom; \
 	done
 
 runwise_response:
@@ -41,17 +41,17 @@ first_level_models:
 	done
 
 C1S := belief interact \
-face_third+face_first+com_phy+com_ind \
+face_third face_third+face_first+com_phy+com_ind \
 face_third+face_first com_phy+com_ind \
 com_phy com_ind face_third face_first \
 face_third+face_noncom body face_first
 C2S := photo noninteract \
-face_noncom+phy+ind \
+object face_noncom+phy+ind \
 face_noncom phy+ind \
 phy ind face_noncom face_noncom \
 object object face_third
 TASKS := tom pointlight \
-communicate \
+communicate communicate \
 communicate communicate \
 communicate communicate communicate communicate \
 communicate communicate communicate

@@ -6,7 +6,7 @@
 #SBATCH --mem-per-cpu=4GB
 #SBATCH --cpus-per-task=8
 #SBATCH --output=logs/%x_%A.out
-#SBATCH --exclude=node3806,node3909,node3908
+#SBATCH --exclude=node3806,node3909,node3908,node3808
 
 sub=$1
 task=$2

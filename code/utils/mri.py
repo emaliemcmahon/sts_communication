@@ -111,19 +111,20 @@ def parse_contrast(model, c1, c2):
         contrast[columns.index(cond)] = weight
 
     # Parse condition two (negative weights)
-    cond2_averaging = c2.split('+')
-    for c in cond2_averaging:
-        c = c.strip()
-        if '*' in c:
-            # Parse weighted contrast
-            weight, cond = c.split('*')
-            weight = float(weight.strip())
-            cond = cond.strip()
-        else:
-            # No weight specified, use equal weighting
-            weight = 1/len(cond2_averaging)
-            cond = c
-        contrast[columns.index(cond)] = -weight
+    if c2 is not None:
+        cond2_averaging = c2.split('+')
+        for c in cond2_averaging:
+            c = c.strip()
+            if '*' in c:
+                # Parse weighted contrast
+                weight, cond = c.split('*')
+                weight = float(weight.strip())
+                cond = cond.strip()
+            else:
+                # No weight specified, use equal weighting
+                weight = 1/len(cond2_averaging)
+                cond = c
+            contrast[columns.index(cond)] = -weight
 
     return contrast
 
@@ -145,9 +146,9 @@ def selective_mask_img(mask_file, img_file, keep_prop=0.1, debug_output=None):
     # Load data with sanity checks
     mask = nib.load(mask_file)
     img = nib.load(img_file)
-    
-    print("\n=== INPUT VALIDATION ===")
-    print(f"Image shape: {img.shape} | Mask shape: {mask.shape}")
+    if debug_output is not None:
+        print("\n=== INPUT VALIDATION ===")
+        print(f"Image shape: {img.shape} | Mask shape: {mask.shape}")
     
     if img.shape != mask.shape:
         raise ValueError("Image and mask must have identical dimensions")
@@ -167,8 +168,9 @@ def selective_mask_img(mask_file, img_file, keep_prop=0.1, debug_output=None):
     
     # Check mask is binary
     unique_mask_vals = np.unique(mask_data)
-    print(f"\n=== MASK VALIDATION ===")
-    print(f"Unique mask values: {unique_mask_vals}")
+    if debug_output is not None:
+        print(f"\n=== MASK VALIDATION ===")
+        print(f"Unique mask values: {unique_mask_vals}")
     
     if len(unique_mask_vals) > 2:
         print("WARNING: Mask appears non-binary - thresholding at 0.5")
@@ -178,10 +180,11 @@ def selective_mask_img(mask_file, img_file, keep_prop=0.1, debug_output=None):
     parcel_size = np.sum(mask_data > 0)
     voxels_to_keep = int(parcel_size * keep_prop)
     
-    print(f"\n=== VOXEL SELECTION ===")
-    print(f"Parcel size: {parcel_size} voxels")
-    print(f"Attempting to select top {voxels_to_keep} positive voxels ({keep_prop*100:.1f}% of parcel)")
-    
+    if debug_output is not None:
+        print(f"\n=== VOXEL SELECTION ===")
+        print(f"Parcel size: {parcel_size} voxels")
+        print(f"Attempting to select top {voxels_to_keep} positive voxels ({keep_prop*100:.1f}% of parcel)")
+        
     if voxels_to_keep == 0:
         raise ValueError("No voxels to select - check your mask and keep_prop")
     
@@ -190,8 +193,9 @@ def selective_mask_img(mask_file, img_file, keep_prop=0.1, debug_output=None):
     positive_voxel_indices = np.where(positive_voxels_mask.flatten())[0]
     positive_voxel_values = img_data.flatten()[positive_voxel_indices]
     
-    print(f"Found {len(positive_voxel_values)} positive voxels in parcel")
-    print(f"Response range: {np.min(positive_voxel_values):.2f} to {np.max(positive_voxel_values):.2f}")
+    if debug_output is not None:
+        print(f"Found {len(positive_voxel_values)} positive voxels in parcel")
+        print(f"Response range: {np.min(positive_voxel_values):.2f} to {np.max(positive_voxel_values):.2f}")
     
     # Determine how many we can actually select (up to voxels_to_keep)
     actual_voxels_to_select = min(voxels_to_keep, len(positive_voxel_values))
@@ -212,9 +216,10 @@ def selective_mask_img(mask_file, img_file, keep_prop=0.1, debug_output=None):
     new_mask = new_mask_flat.reshape(img_data.shape)
     
     # Verification
-    actual_voxels_kept = np.sum(new_mask)
-    print(f"\n=== VERIFICATION ===")
-    print(f"Requested voxels: {voxels_to_keep} | Selected voxels: {actual_voxels_kept}")
+    if debug_output is not None:
+        actual_voxels_kept = np.sum(new_mask)
+        print(f"\n=== VERIFICATION ===")
+        print(f"Requested voxels: {voxels_to_keep} | Selected voxels: {actual_voxels_kept}")
     
     # Create output image
     output_img = nib.Nifti1Image(new_mask.astype(np.int8), img.affine)

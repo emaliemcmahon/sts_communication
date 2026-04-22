@@ -114,7 +114,7 @@ class GroupParcelProbability:
         probability_map = mask_sum / n_subjects
         
         # Create thresholded mask (probability >= 0.5)
-        thresholded_mask = np.where(probability_map >= 0.5, 1, 0).astype(np.int32)
+        thresholded_mask = np.where(probability_map >= 0.25, 1, 0).astype(np.int32)
         
         # Create nibabel images
         prob_img = nib.Nifti1Image(probability_map, affine)
