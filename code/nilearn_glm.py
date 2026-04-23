@@ -23,7 +23,8 @@ contrasts = {'communicate': [
                 ('face_first', 'face_noncom'),
                 ('face_third+face_noncom', 'object'),
                 ('face_first', 'face_third'),
-                ('body', 'object')
+                ('body', 'object'),
+                ('com_phy+phy+com_ind+ind+face_third+face_first+face_noncom+object+body', None)
             ],
              'tom': [('belief', 'photo')],
              'pointlight': [('interact', 'noninteract')]
@@ -92,7 +93,7 @@ class NilearnGLM:
 
         # Compute and save all contrasts
         for c1, c2 in tqdm(self.contrasts, total=len(self.contrasts), desc='Computing contrasts'):
-            contrast_name = f'{c1}-{c2}'
+            contrast_name = c1 if c2 is None else f'{c1}-{c2}'
             contrast = parse_contrast(model, c1, c2)
             tmap = model.compute_contrast(contrast, stat_type='t', output_type='stat')
             nib.save(tmap, f'{self.out_path}/sub-{self.subj}/task-{self.task_label}/contrast-{contrast_name}_stat-tmap.nii.gz')

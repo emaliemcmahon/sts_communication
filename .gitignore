@@ -1,4 +1,11 @@
-derivatives/
+derivatives/fmriprep/
+derivatives/GroupParcelProbability/
+derivatives/GroupRandomEffects/
+derivatives/NilearnGLMRunwise/
+derivatives/NilearnGLM/*/*/*mask*
+derivatives/RunwiseResponse/
+derivatives/stimuli/
+derivatives/SurfacePlots/
 sourcedata/
 tmp_dcm2bids/
 sub*/

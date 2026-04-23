@@ -7,7 +7,7 @@ import nibabel as nib
 from tqdm import tqdm
 from nilearn.masking import intersect_masks
 from itertools import product
-from utils.mri import info2vars, selective_mask_img, parse_contrast
+from utils.mri import info2vars, selective_mask_img, parse_contrast, roi_size, roi_switcher
 import warnings
 
 # Suppress the specific warning about unexpected columns in events data
@@ -36,28 +36,6 @@ froi_contrasts = {'pointlight': {'interact-noninteract': ['SI-STS']},
                                   'com_phy+com_ind-phy+ind': ['dyadcom-STS'],
                                   'face_third+face_first-face_noncom': ['facecom-STS'],
                                   'com_phy+phy+com_ind+ind+face_third+face_first+face_noncom+object+body': ['EVC', 'MT']}}
-
-roi_size = {'comphy-STS': .05, 'comind-STS': .05, 'TPJ': .1,
-            'dyadcom-STS': .05, 'facecom-STS': .05,
-            'EBA': .1, 'fSTS': .1, 'FFA': .1, 'SI-STS': .05,
-            'EVC': 0.05, 'MT': 0.1, 
-            'com-STS': .05,
-            'phy-STS': 0.05}
-
-roi_parc = {'comphy-STS': 'anatSTS',
-            'comind-STS': 'anatSTS',
-            'facecom-STS': 'anatSTS',
-            'dyadcom-STS': 'anatSTS',
-            'SI-STS': 'anatSTS', 
-            'com-STS': 'anatSTS',
-            'phy-STS': 'anatSTS'}
-
-
-def roi_switcher(roi):
-    if roi in list(roi_parc.keys()):
-        return roi_parc[roi]
-    else:
-        return roi
 
 
 def split_into_groups(items, n_groups=3):
@@ -142,8 +120,7 @@ class NilearnGLMRunwise:
                         output_file = f'{self.out_path}/sub-{self.subject_label}/sub-{self.subject_label}_run-{igroup+1}_{hemi}{roi}'      
                         mask_file = f'{self.parcel_path}/{hemi}{roi_switcher(roi)}.nii.gz'
                         new_mask = selective_mask_img(mask_file, contrast_file, 
-                                                      keep_prop=roi_size[roi],
-                                                      debug_output=f'{self.out_path}/sub-{self.subject_label}/debug_{hemi}{roi}_run-{igroup+1}.png')
+                                                      keep_prop=roi_size[roi])
                         nib.save(new_mask, f'{output_file}.nii.gz')
 
             # Compute the model and contrasts to estimate the responses

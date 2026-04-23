@@ -33,12 +33,12 @@ group_runwise:
 
 first_level_models: 
 	for s in $(subs); do \
-		sbatch $(project_path)/code/batch_nilearn_glm.sh "$$s" pointlight; \
+# 		sbatch $(project_path)/code/batch_nilearn_glm.sh "$$s" pointlight; \
 		sbatch $(project_path)/code/batch_nilearn_glm.sh "$$s" communicate; \
 	done
-	for s in $(tom_subs); do \
-		sbatch $(project_path)/code/batch_nilearn_glm.sh "$$s" tom; \
-	done
+# 	for s in $(tom_subs); do \
+# 		sbatch $(project_path)/code/batch_nilearn_glm.sh "$$s" tom; \
+# 	done
 
 C1S := belief interact \
 face_third face_third+face_first+com_phy+com_ind \

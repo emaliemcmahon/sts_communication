@@ -1,13 +1,99 @@
 from nilearn.datasets import load_fsaverage, load_fsaverage_data
-from nilearn.surface import SurfaceImage
+from nilearn.surface import SurfaceImage, vol_to_surf
 import numpy as np
 from nilearn.plotting import plot_glass_brain
 import matplotlib.pyplot as plt
 import nibabel as nib
 
+
+roi_size = {'comphy-STS': .05, 'comind-STS': .05, 'TPJ': .1,
+            'dyadcom-STS': .05, 'facecom-STS': .05,
+            'EBA': .1, 'fSTS': .1, 'FFA': .1, 'SI-STS': .05,
+            'EVC': 0.05, 'MT': 0.1, 
+            'com-STS': .05,
+            'phy-STS': 0.05}
+
+
+roi_parc = {'comphy-STS': 'anatSTS',
+            'comind-STS': 'anatSTS',
+            'facecom-STS': 'anatSTS',
+            'dyadcom-STS': 'anatSTS',
+            'SI-STS': 'anatSTS', 
+            'com-STS': 'anatSTS',
+            'phy-STS': 'anatSTS'}
+
+
+def roi_switcher(roi):
+    if roi in list(roi_parc.keys()):
+        return roi_parc[roi]
+    else:
+        return roi
+    
+
 def info2vars(model_info):
     (models, imgs, events, confounds) = model_info
     return models[0], imgs[0], events[0], confounds[0]
+
+
+def vol2surf_int(stat_img, output_int=1, fsaverage_meshes=None, fsaverage_sulcal=None):
+    """
+    Project volume data to surface with depth sampling and binarize.
+    
+    Parameters
+    ----------
+    stat_img : nib.Nifti1Image
+        Statistical image in volume space
+    output_int : int
+        Integer value to assign to binarized ROI
+    fsaverage_meshes : dict
+        Dict with keys 'white_left', 'pial_left', 'white_right', 'pial_right'
+        containing paths to mesh files
+    fsaverage_sulcal : str
+        Path to sulcal depth map
+    
+    Returns
+    -------
+    surf_img : SurfaceImage
+        Projected and binarized surface image
+    """
+    from nilearn.surface import SurfaceImage
+    
+    if fsaverage_meshes is None:
+        raise ValueError("fsaverage_meshes dict must be provided")
+    
+    vol_to_surf_kwargs = {
+        "kind": "depth", 
+        "depth": [0, 0.5, 1], 
+        "interpolation": "nearest_most_frequent"
+    }
+    
+    # Create mesh dict for both hemispheres (pial surface)
+    mesh = {
+        "left": fsaverage_meshes["pial_left"],
+        "right": fsaverage_meshes["pial_right"]
+    }
+    
+    # Create inner_mesh dict for both hemispheres (white matter surface)
+    inner_mesh = {
+        "left": fsaverage_meshes["white_left"],
+        "right": fsaverage_meshes["white_right"]
+    }
+    
+    # Use SurfaceImage.from_volume which handles both hemispheres automatically
+    surf_img = SurfaceImage.from_volume(
+        mesh=mesh,
+        volume_img=stat_img,
+        inner_mesh=inner_mesh,
+        **vol_to_surf_kwargs
+    )
+    
+   # Binarize the surface data
+    # Access .parts dict to get left/right data
+    surf_img.data.parts['left'] = (surf_img.data.parts['left'] > 0.5).astype(np.int32) * output_int
+    surf_img.data.parts['right'] = (surf_img.data.parts['right'] > 0.5).astype(np.int32) * output_int
+
+    return surf_img
+    
 
 
 def vol2surf(stat_img):
@@ -129,7 +215,7 @@ def parse_contrast(model, c1, c2):
     return contrast
 
 
-def selective_mask_img(mask_file, img_file, keep_prop=0.1, debug_output=None):
+def selective_mask_img(mask_file, img_file, keep_prop=0.1, debug_output=None, return_nifti=True):
     """
     Create a new mask by selecting top positive voxels within a parcel.
     Number of voxels to keep is based on total parcel size.
@@ -139,9 +225,10 @@ def selective_mask_img(mask_file, img_file, keep_prop=0.1, debug_output=None):
         img_file: Path to reference image NIfTI file
         keep_prop: Proportion of total parcel voxels to keep (0-1)
         debug_output: Path to save debug plots (None to skip saving)
+        return_nifti: If True, return NIfTI image; if False, return numpy array
         
     Returns:
-        New NIfTI image with selected voxels
+        New NIfTI image or numpy array with selected voxels
     """
     # Load data with sanity checks
     mask = nib.load(mask_file)
@@ -222,27 +309,30 @@ def selective_mask_img(mask_file, img_file, keep_prop=0.1, debug_output=None):
         print(f"Requested voxels: {voxels_to_keep} | Selected voxels: {actual_voxels_kept}")
     
     # Create output image
-    output_img = nib.Nifti1Image(new_mask.astype(np.int8), img.affine)
-    
-    # Visualize results
-    if debug_output is not None:
-        plot_glass_brain(output_img, 
-                        title=f"Selected {actual_voxels_kept} voxels", 
-                        axes=axes[1,0])
+    if return_nifti:
+        output_img = nib.Nifti1Image(new_mask.astype(np.int8), img.affine)
         
-        # Plot histogram
-        axes[1,1].hist(positive_voxel_values, bins=50, alpha=0.7, label='All positive voxels')
-        if actual_voxels_to_select > 0:
-            selected_values = positive_voxel_values[sorted_indices]
-            axes[1,1].hist(selected_values, bins=50, alpha=0.7, 
-                          label='Selected voxels', color='red')
-        axes[1,1].set_title("Response Value Distribution")
-        axes[1,1].legend()
-        axes[1,1].set_xlabel("Response value")
-        axes[1,1].set_ylabel("Count")
-        
-        plt.tight_layout()
-        plt.savefig(debug_output)
-        plt.close()
+        # Visualize results
+        if debug_output is not None:
+            plot_glass_brain(output_img, 
+                            title=f"Selected {actual_voxels_kept} voxels", 
+                            axes=axes[1,0])
+            
+            # Plot histogram
+            axes[1,1].hist(positive_voxel_values, bins=50, alpha=0.7, label='All positive voxels')
+            if actual_voxels_to_select > 0:
+                selected_values = positive_voxel_values[sorted_indices]
+                axes[1,1].hist(selected_values, bins=50, alpha=0.7, 
+                            label='Selected voxels', color='red')
+            axes[1,1].set_title("Response Value Distribution")
+            axes[1,1].legend()
+            axes[1,1].set_xlabel("Response value")
+            axes[1,1].set_ylabel("Count")
+            
+            plt.tight_layout()
+            plt.savefig(debug_output)
+            plt.close()
     
-    return output_img
+        return output_img
+    else:
+        return new_mask.astype(np.int8)
