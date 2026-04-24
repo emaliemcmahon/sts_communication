@@ -45,7 +45,7 @@ class PlotSurfaces:
         plot_glass_brain(
             stat_img,
             threshold=self.threshold,
-            vmin=0,
+            vmin=self.threshold,
             cmap=self.palette,
             colorbar=True,
             plot_abs=False,
@@ -65,7 +65,7 @@ class PlotSurfaces:
                 hemi=hemi,
                 view=view,
                 threshold=self.threshold,
-                vmin=0,
+                vmin=self.threshold,
                 bg_map=fsaverage_sulcal,
                 darkness=None,
                 cmap=self.palette
@@ -96,9 +96,9 @@ def main():
     parser = argparse.ArgumentParser(description='Plot pretty surface maps for a given contrast')
     parser.add_argument('--dataset_path', '-d', type=str,
                         default='/orcd/data/ngk/001/users/emaliem/sts_communication')
-    parser.add_argument('--condition_one', '-c1', type=str, default='face_third+face_noncom',
+    parser.add_argument('--condition_one', '-c1', type=str, default='face_third+face_first+com_phy+com_ind',
                          help='The first condition for the second level analysis')
-    parser.add_argument('--condition_two', '-c2', type=str, default='object',
+    parser.add_argument('--condition_two', '-c2', type=str, default='face_noncom+phy+ind',
                          help='The second condition for the second level analysis')
     parser.add_argument('--palette_name', type=str, default='Reds',
                          help='Seaborn color palette name')
