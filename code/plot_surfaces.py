@@ -96,13 +96,13 @@ def main():
     parser = argparse.ArgumentParser(description='Plot pretty surface maps for a given contrast')
     parser.add_argument('--dataset_path', '-d', type=str,
                         default='/orcd/data/ngk/001/users/emaliem/sts_communication')
-    parser.add_argument('--condition_one', '-c1', type=str, default='face_third+face_first+com_phy+com_ind',
+    parser.add_argument('--condition_one', '-c1', type=str, default='interact',
                          help='The first condition for the second level analysis')
-    parser.add_argument('--condition_two', '-c2', type=str, default='face_noncom+phy+ind',
+    parser.add_argument('--condition_two', '-c2', type=str, default='noninteract',
                          help='The second condition for the second level analysis')
     parser.add_argument('--palette_name', type=str, default='Reds',
                          help='Seaborn color palette name')
-    parser.add_argument('--task', '-t', type=str, default='communicate',
+    parser.add_argument('--task', '-t', type=str, default='pointlight',
                          help='Task label for the analysis')
     args = parser.parse_args()
     PlotSurfaces(args).plot()
