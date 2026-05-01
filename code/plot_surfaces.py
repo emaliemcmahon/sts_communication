@@ -75,6 +75,14 @@ class PlotSurfaces:
             cbar = fig.axes[-1]  # Get the colorbar axis
             cbar.set_ylabel('t-value', rotation=270, labelpad=20)
 
+            # Adjust colorbar height to make it less tall
+            pos = cbar.get_position()
+            cbar.set_position([pos.x0, pos.y0 + pos.height * 0.2, pos.width, pos.height * 0.8])
+
+            # Set ticks to be equally distributed
+            vmin, vmax = cbar.get_ylim()
+            cbar.set_yticks(np.linspace(vmin, vmax, 5))
+
             # Make background transparent
             fig.patch.set_alpha(0)
             for ax in fig.axes:
