@@ -1,5 +1,4 @@
 derivatives/fmriprep/
-derivatives/GroupParcelProbability/
 derivatives/GroupRandomEffects/
 derivatives/NilearnGLMRunwise/
 derivatives/RunwiseResponse/
