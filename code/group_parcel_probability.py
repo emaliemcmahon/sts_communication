@@ -12,6 +12,7 @@ from nilearn.datasets import load_fsaverage, load_fsaverage_data
 from nilearn.surface import SurfaceImage
 from nilearn.image import smooth_img
 from utils.mri import vol2surf
+from nilearn.masking import intersect_masks, apply_mask
 
 parcel_name = {'communicate': {'face_third+face_first+com_phy+com_ind-face_noncom+phy+ind': 'communication_parcel',
                                'face_third+face_noncom-object': 'face_parcel',
@@ -87,6 +88,13 @@ class GroupParcelProbability:
         
         print(f'Saved surface plot: {plot_path}')
 
+
+    def load_parcel_masks(self):
+        parcel_path = f'{self.derivatives_path}/parcels-MNI152NLin2009cAsym/*anatSTS.nii.gz'
+        parcel_files = sorted(glob(parcel_path))
+        combined_parcel = intersect_masks(parcel_files, threshold=0, connected=False)
+        return combined_parcel
+
     def create_probability_maps(self):
         print('Creating probability maps...')
         n_subjects = len(self.mask_files)
@@ -103,12 +111,13 @@ class GroupParcelProbability:
         # Initialize sum array
         mask_sum = np.zeros(shape, dtype=np.float32)
         
+        sts_mask = self.load_parcel_masks()
+
         # Sum all masks
         for mask_file in tqdm(self.mask_files, desc='Summing masks'):
             mask_img = nib.load(mask_file)
-            # mask_img = smooth_img(mask_img, fwhm=20)
-            mask_data = mask_img.get_fdata()
-            mask_sum += mask_data
+            masked_mask_img = intersect_masks([mask_img, sts_mask], threshold=1)
+            mask_sum += masked_mask_img.get_fdata()
         
         # Create probability map (sum / n_subjects)
         probability_map = mask_sum / n_subjects
@@ -137,11 +146,11 @@ def main():
     parser = argparse.ArgumentParser(description='Create probability maps from first-level contrast masks')
     parser.add_argument('--dataset_path', '-d', type=str,
                         default='/orcd/data/ngk/001/users/emaliem/sts_communication')
-    parser.add_argument('--condition_one', '-c1', type=str, required=True,
+    parser.add_argument('--condition_one', '-c1', type=str, default='interact',
                          help='The first condition for the contrast')
-    parser.add_argument('--condition_two', '-c2', type=str, required=True,
+    parser.add_argument('--condition_two', '-c2', type=str, default='noninteract',
                          help='The second condition for the contrast')
-    parser.add_argument('--task_label', '-t', type=str, required=True,
+    parser.add_argument('--task_label', '-t', type=str, default='pointlight',
                          help='Task label (communicate, tom, pointlight)')
     args = parser.parse_args()
 

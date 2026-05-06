@@ -18,6 +18,7 @@ contrasts = [('face-first', 'face-noncom'),
              ('face-third', 'face-noncom'),
              ('com-ind', 'ind'),
              ('com-joint', 'joint'), 
+             ('joint', 'ind'),
             #  ('com-ind', 'interact'),
             #  ('com-joint', 'interact'),
             #  ('face-first', 'interact'),
@@ -157,8 +158,10 @@ class GroupRunwiseResults:
         if self.plot_object_body:
             palette = [
                     # "#E57373",  # Soft muted red (object)
-                    # '#6FC276',  # Soft green (body)
                     # '#FFFFFF',  # hold1
+                    "#26A69A",  # Dark teal (interact)
+                    "#80CBC4",  # Light teal (noninteract)
+                    '#FFFFFF',  # hold4
                     "#673AB7",  # Rich muted violet (Dark Purple 1) - com-ind
                     "#B39DDB",  # Pale lilac (Light Purple 2) - ind
                     '#FFFFFF',  # hold2
@@ -168,25 +171,22 @@ class GroupRunwiseResults:
                     "#3949AB",  # Deep muted navy (Dark Blue 1) - face-first
                     "#5C6BC0",  # Dusty periwinkle (Dark Blue 2) - face-third
                     "#90CAF9",  # Pale sky blue (Light Blue) - face-noncom
-                    '#FFFFFF',  # hold4
-                    "#26A69A",  # Dark teal (interact)
-                    "#80CBC4",  # Light teal (noninteract)
                     # '#FFFFFF',  # hold5
                     # "#FF9800",  # Dark amber (belief)
                     # "#FFCC80",  # Light amber (photo)
                 ]
-            conditions = [#'object', 'body', 'hold1', 
-                          'com-ind', 'ind', 'hold1', 
-                          'com-joint', 'joint', 'hold2',
-                          'face-first', 'face-third', 'face-noncom', 'hold3',
-                          'interact', 'noninteract', 
+            conditions = [#'object', 'hold1',
+                          'interact', 'noninteract', 'hold1', 
+                          'com-ind', 'ind', 'hold2',
+                          'com-joint', 'joint', 'hold3',
+                          'face-third', 'face-first', 'face-noncom', 
                           #'hold5', 'belief', 'photo'
                           ]
-            xtick_labels = [#'object', 'body', ' ',
-                            'dyads\ntalking', 'dyads\nnot\ninter-\nacting', ' ',
-                            'dyads\ntalking', 'dyads\ninter-\nacting\nnot\ntalking', ' ',
-                            'face\ntalking\nto viewer', 'face\ntalking\noff\nscreen', 'face\nself\ndirected\naction', ' ',
-                            'pointlight\ninteract', 'pointlight\nnoninteract', 
+            xtick_labels = [#'object', ' ',
+                            'pointlight\ninteract', 'pointlight\nnoninteract', ' ',
+                            'dyads\ntalking', 'dyads\nnot\ninteracting', ' ',
+                            'dyads\ntalking', 'dyads\ninteracting\nnot\ntalking', ' ',
+                            'individual\ntalking\noff\nscreen', 'individual\ntalking\nto viewer', 'individual\nself-\ndirected\naction', 
                             #' ', 'false\nbelief', 'false\nphoto'
                             ]
         else:
@@ -207,7 +207,7 @@ class GroupRunwiseResults:
                           ]
             xtick_labels = ['dyads\ntalking', 'dyads\nnot\ninter-\nacting', ' ',
                             'dyads\ntalking', 'dyads\ninter-\nacting\nnot\ntalking', ' ',
-                            'face\ntalking\nto viewer', 'face\ntalking\noff\nscreen', 'face\nself\ndirected\naction']
+                            'individual\ntalking\nto viewer', 'individual\ntalking\noff\nscreen', 'individual\nself\ndirected\naction']
                 
         num_holds = sum(1 for c in conditions if 'hold' in c)
         fill_holds = []
@@ -344,7 +344,7 @@ def main():
                         default=[1,2,3,4,5,7,8,9,11,12,13,14,15,16,18,19,20,21,22,23])
     parser.add_argument('--dataset_path', '-d', type=str,
                         default='/orcd/data/ngk/001/users/emaliem/sts_communication')
-    parser.add_argument('--overwrite', action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument('--overwrite', action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument('--plot_object_body', action=argparse.BooleanOptionalAction, default=True,
                         help='Include object and body conditions in individual ROI plots')
     args = parser.parse_args()
