@@ -55,38 +55,40 @@ class GroupParcelProbability:
             mesh_type="inflated",
         )
         
-    def plot_surface(self, img, threshold=0.1, cmap='hot', ylabel='Probability', filename_suffix='surface_right'):
+    def plot_surface(self, img, threshold=0.1, cmap='hot', ylabel='Probability', filename_suffix=''):
         """Plot the image on the right lateral surface"""
         print(f'Creating surface plot for {ylabel.lower()} (right hemisphere)...')
         surf_img, fsaverage_meshes, fsaverage_sulcal = vol2surf(img)  # Ensure img is in the correct format for surface plotting
 
-        # Plot right lateral surface
-        fig = plot_surf_stat_map(
-            stat_map=surf_img,
-            surf_mesh=fsaverage_meshes["inflated"],
-            hemi='right',
-            threshold=threshold,
-            bg_map=fsaverage_sulcal,
-            darkness=None,
-            cmap=cmap,
-            vmax=img.get_fdata().max() if ylabel == 'Probability' else None
-        )
-        
-        # Add colorbar label
-        cbar = fig.axes[-1]
-        cbar.set_ylabel(ylabel, rotation=270, labelpad=20)
-        
-        # Make background transparent
-        fig.patch.set_alpha(0)
-        for ax in fig.axes:
-            ax.patch.set_alpha(0)
-        
-        # Save the plot
-        plot_path = f'{self.out_path}/{self.parcel_name}_{filename_suffix}.png'
-        fig.savefig(plot_path, transparent=True, dpi=300, bbox_inches='tight')
-        plt.close(fig)
-        
-        print(f'Saved surface plot: {plot_path}')
+        for hemi in ['left', 'right']:
+            out_suffix = filename_suffix + f'_surface_{hemi}'
+            # Plot right lateral surface
+            fig = plot_surf_stat_map(
+                stat_map=surf_img,
+                surf_mesh=fsaverage_meshes["inflated"],
+                hemi=hemi,
+                threshold=threshold,
+                bg_map=fsaverage_sulcal,
+                darkness=None,
+                cmap=cmap,
+                vmax=0.75#img.get_fdata().max() if ylabel == 'Probability' else None
+            )
+            
+            # Add colorbar label
+            cbar = fig.axes[-1]
+            cbar.set_ylabel(ylabel, rotation=270, labelpad=20)
+            
+            # Make background transparent
+            fig.patch.set_alpha(0)
+            for ax in fig.axes:
+                ax.patch.set_alpha(0)
+            
+            # Save the plot
+            plot_path = f'{self.out_path}/{self.parcel_name}{out_suffix}.png'
+            fig.savefig(plot_path, transparent=True, dpi=300, bbox_inches='tight')
+            plt.close(fig)
+            
+            print(f'Saved surface plot: {plot_path}')
 
 
     def load_parcel_masks(self):
@@ -129,17 +131,17 @@ class GroupParcelProbability:
         prob_img = nib.Nifti1Image(probability_map, affine)
         thresh_img = nib.Nifti1Image(thresholded_mask, affine)
         
-        # Save results
-        nib.save(prob_img, f'{self.out_path}/{self.parcel_name}_probability.nii.gz')
-        nib.save(thresh_img, f'{self.out_path}/{self.parcel_name}_mask-thresholded.nii.gz')
+        # # Save results
+        # nib.save(prob_img, f'{self.out_path}/{self.parcel_name}_probability.nii.gz')
+        # nib.save(thresh_img, f'{self.out_path}/{self.parcel_name}_mask-thresholded.nii.gz')
         
         print(f'Saved probability map and thresholded mask for {self.parcel_name}')
         print(f'Probability map range: {probability_map.min():.3f} - {probability_map.max():.3f}')
         print(f'Number of voxels in thresholded mask: {thresholded_mask.sum()}')
         
         # Create surface plot
-        self.plot_surface(prob_img)
-        self.plot_surface(thresh_img, threshold=0.5, cmap='Reds', ylabel='Mask', filename_suffix='mask_surface_right')
+        self.plot_surface(prob_img, threshold=0.05)
+        # self.plot_surface(thresh_img, threshold=0.5, cmap='Reds', ylabel='Mask', filename_suffix='_mask')
 
 
 def main():
