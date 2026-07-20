@@ -17,3 +17,12 @@ participants.json
 notebooks/
 **/__pycache__/
 __pycache__/
+# Site-specific / non-shared pipeline pieces
+logs/
+code/batch_*.sh
+code/dcm2bids.config
+code/rm_aborted_runs.py
+code/visualize_anatomy.py
+code/envs/dcm2bids-enviornment.yml
+code/envs/nilearn-enviornment.yml
+code/envs/pytorch-environment.yml

@@ -1,7 +1,0 @@
-name: dcm2bids
-channels:
-  - conda-forge
-dependencies:
-  - python>=3.7
-  - dcm2niix
-  - dcm2bids
