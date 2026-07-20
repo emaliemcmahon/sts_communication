@@ -26,3 +26,5 @@ code/visualize_anatomy.py
 code/envs/dcm2bids-enviornment.yml
 code/envs/nilearn-enviornment.yml
 code/envs/pytorch-environment.yml
+output.log
+dataset_description.json
