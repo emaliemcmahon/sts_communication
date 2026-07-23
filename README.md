@@ -5,7 +5,6 @@ Data and code exploring functional selectivity for communicative interactions in
 - **Preregistration:** https://osf.io/ermyv/overview
 - **Project page:** https://osf.io/79632/overview
 - **Raw BIDS data (`sub-*/`):** OpenNeuro — *URL to be added*
-- **Methods write-up:** [methods.md](methods.md)
 
 ## Overview
 
@@ -15,7 +14,7 @@ This repository contains the analysis code and derived results for a study of fu
 2. **`pointlight`** — four runs of the point-light social-interaction localizer (`interact` vs. `noninteract`).
 3. **`tom`** — two runs of the false-belief / false-photograph theory-of-mind localizer (`belief` vs. `photo`; 17 of 20 participants).
 
-Analyses produce (i) whole-brain second-level statistical maps (TFCE + FWER via non-parametric inference), (ii) cross-validated functional ROI (fROI) responses in a set of visual, social, and communication-related ROIs along the STS and elsewhere, and (iii) group probability maps of single-subject contrast selectivity. Full participant demographics are in [participants.tsv](participants.tsv); a written-up Methods section suitable for publication is in [methods.md](methods.md).
+Analyses produce (i) whole-brain second-level statistical maps (TFCE + FWER via non-parametric inference), (ii) cross-validated functional ROI (fROI) responses in a set of visual, social, and communication-related ROIs along the STS and elsewhere, and (iii) group probability maps of single-subject contrast selectivity. Full participant demographics are in [participants.tsv](participants.tsv).
 
 ## Data availability
 
@@ -31,7 +30,6 @@ sts_communication/
 ├── dataset_description.json # BIDS dataset descriptor
 ├── participants.tsv         # de-identified demographics
 ├── preregistration.pdf      # OSF preregistration (frozen)
-├── methods.md               # methods section suitable for publication
 ├── requirements.txt         # pip-installable Python packages (nilearn env)
 ├── sub-XX/ses-01/           # BIDS raw data — NOT in git; download from OpenNeuro
 ├── derivatives/
