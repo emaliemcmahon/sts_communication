@@ -1,8 +1,0 @@
-tmp_dcm2bids/
-derivatives/
-tmp/
-logs/
-makefile
-notebooks/
-preregistration.pdf
-output.log
