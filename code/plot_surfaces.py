@@ -73,7 +73,7 @@ class PlotSurfaces:
 
             # Add colorbar label
             cbar = fig.axes[-1]  # Get the colorbar axis
-            cbar.set_ylabel('t-value', rotation=270, labelpad=20)
+            cbar.set_ylabel('t-value', rotation=270, labelpad=20, fontsize=16, fontweight='bold')
 
             # Adjust colorbar height to make it less tall
             pos = cbar.get_position()
@@ -82,6 +82,9 @@ class PlotSurfaces:
             # Set ticks to be equally distributed
             vmin, vmax = cbar.get_ylim()
             cbar.set_yticks(np.linspace(vmin, vmax, 5))
+            
+            # Make tick labels bigger
+            cbar.tick_params(axis='y', labelsize=14)
 
             # Make background transparent
             fig.patch.set_alpha(0)
@@ -104,13 +107,13 @@ def main():
     parser = argparse.ArgumentParser(description='Plot pretty surface maps for a given contrast')
     parser.add_argument('--dataset_path', '-d', type=str,
                         default='/orcd/data/ngk/001/users/emaliem/sts_communication')
-    parser.add_argument('--condition_one', '-c1', type=str, default='interact',
+    parser.add_argument('--condition_one', '-c1', type=str, default='face_third+face_first+com_phy+com_ind',
                          help='The first condition for the second level analysis')
-    parser.add_argument('--condition_two', '-c2', type=str, default='noninteract',
+    parser.add_argument('--condition_two', '-c2', type=str, default='face_noncom+phy+ind_surface',
                          help='The second condition for the second level analysis')
     parser.add_argument('--palette_name', type=str, default='Reds',
                          help='Seaborn color palette name')
-    parser.add_argument('--task', '-t', type=str, default='pointlight',
+    parser.add_argument('--task', '-t', type=str, default='communicate',
                          help='Task label for the analysis')
     args = parser.parse_args()
     PlotSurfaces(args).plot()

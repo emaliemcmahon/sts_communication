@@ -28,3 +28,7 @@ code/envs/nilearn-enviornment.yml
 code/envs/pytorch-environment.yml
 output.log
 dataset_description.json
+CLAUDE.md
+.bidsignore
+methods.md
+**/.DS_Store

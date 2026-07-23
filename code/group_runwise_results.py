@@ -38,6 +38,7 @@ class GroupRunwiseResults:
         self.dataset_path = args.dataset_path
         self.overwrite = args.overwrite
         self.plot_object_body = args.plot_object_body
+        self.plot_joint_ind_bar = args.plot_joint_ind_bar
         self.derivatives_path = f'{self.dataset_path}/derivatives'
         self.individual_path = f'{self.derivatives_path}/RunwiseResponse'
         self.out_path = f'{self.derivatives_path}/{self.process}'
@@ -106,6 +107,10 @@ class GroupRunwiseResults:
             face_pos = None
             stats_pos = []
             for _, row in roi_stats.iterrows():
+                if (not self.plot_joint_ind_bar and row['c1'] == 'joint'
+                        and row['c2'] == 'ind'):
+                    continue
+
                 # Get the indicies of the conditions for the axis
                 c1_ind = self.plotting_conditions.index(row['c1'])
                 c2_ind = self.plotting_conditions.index(row['c2'])
@@ -229,9 +234,10 @@ class GroupRunwiseResults:
         stats = stats.loc[stats.c1.isin(c1s)].reset_index(drop=True)
         stats = stats.loc[stats.roi.isin(rois) & (stats.hemi == hemi)].set_index('roi')
 
+        sns.set_context('poster', font_scale=2)
         for roi in rois:
             fig, ax = plt.subplots(1, 1,
-                                   figsize=(1.2*len(conditions), 4.6))
+                                   figsize=(56,10))
             sns.barplot(x='trial_type', y='response',
                         hue='trial_type', legend=False,
                         ax=ax, data=df.loc[roi].reset_index(drop=True), 
@@ -244,6 +250,10 @@ class GroupRunwiseResults:
             stats_pos = []
             roi_stats = stats.loc[roi]
             for _, row in roi_stats.iterrows():
+                if (not self.plot_joint_ind_bar and row['c1'] == 'joint'
+                        and row['c2'] == 'ind'):
+                    continue
+
                 # Get the indicies of the conditions for the axis
                 c1_ind = conditions.index(row['c1'])
                 c2_ind = conditions.index(row['c2'])
@@ -264,14 +274,13 @@ class GroupRunwiseResults:
                             y_pos = face_pos
                             
                     ax.hlines(xmin=c1_ind, xmax=c2_ind, y=y_pos, 
-                              color='gray', linewidth=2)
+                              color='gray', linewidth=5)
                     ax.text(x=c1_ind+((c2_ind-c1_ind)/2),
-                            y=y_pos, s=star, ha='center', 
-                            fontsize=18)
+                            y=y_pos, s=star, ha='center')
                     stats_pos.append(y_pos)
             
             ax.set_xticks(range(len(conditions)))
-            ax.set_xticklabels(xtick_labels, ha='center', fontsize=13)
+            ax.set_xticklabels(xtick_labels, ha='center')
             if stats_pos:
                 ax.set_ylim([0, max(stats_pos)+(max(error_max)*0.15)])
             else:
@@ -347,6 +356,8 @@ def main():
     parser.add_argument('--overwrite', action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument('--plot_object_body', action=argparse.BooleanOptionalAction, default=True,
                         help='Include object and body conditions in individual ROI plots')
+    parser.add_argument('--plot_joint_ind_bar', action=argparse.BooleanOptionalAction, default=True,
+                        help='Plot the dyads not interacting vs. dyads interacting not talking significance bar')
     args = parser.parse_args()
     GroupRunwiseResults(args).run()
 

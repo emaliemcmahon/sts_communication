@@ -2,6 +2,7 @@ user=$(shell whoami)
 project_path=$(shell pwd)
 subs := 01 02 03 04 05 07 08 09 11 12 13 14 15 16 18 19 20 21 22 23
 tom_subs := 01 03 04 05 07 08 09 11 12 13 14 15 16 18 19 22 23
+GROUP_RUNWISE_FLAGS ?=
 
 # Full pipeline (run stages in order)
 all: preprocess first_level_runwise runwise_response group_runwise first_level_models random_effects
@@ -31,7 +32,7 @@ runwise_response:
 
 # Group ROI summaries, paired t-tests, and plots
 group_runwise:
-	python $(project_path)/code/group_runwise_results.py $(subs)
+	python $(project_path)/code/group_runwise_results.py $(subs) $(GROUP_RUNWISE_FLAGS)
 
 # Whole-brain first-level GLMs (one t-map per contrast per subject)
 first_level_models:
