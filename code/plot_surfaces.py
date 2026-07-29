@@ -73,18 +73,24 @@ class PlotSurfaces:
 
             # Add colorbar label
             cbar = fig.axes[-1]  # Get the colorbar axis
-            cbar.set_ylabel('t-value', rotation=270, labelpad=20, fontsize=16, fontweight='bold')
+            cbar.set_ylabel('t-value', rotation=270, labelpad=30, fontsize=22, fontweight='bold',
+                            va='bottom')
+            cbar.yaxis.label.set_rotation(270)
 
             # Adjust colorbar height to make it less tall
             pos = cbar.get_position()
             cbar.set_position([pos.x0, pos.y0 + pos.height * 0.2, pos.width, pos.height * 0.8])
 
-            # Set ticks to be equally distributed
-            vmin, vmax = cbar.get_ylim()
-            cbar.set_yticks(np.linspace(vmin, vmax, 5))
-            
+            # Set ticks to be equally distributed based on the actual data range
+            surf_values = np.concatenate([np.asarray(v).ravel() for v in img.data.parts.values()])
+            vmax = float(np.nanmax(np.abs(surf_values)))
+            vmin = self.threshold if self.threshold is not None else float(np.nanmin(surf_values))
+            ticks = np.linspace(vmin, vmax, 5)
+            cbar.set_yticks(ticks)
+            cbar.set_yticklabels([f'{t:.1f}' for t in ticks])
+
             # Make tick labels bigger
-            cbar.tick_params(axis='y', labelsize=14)
+            cbar.tick_params(axis='y', labelsize=18)
 
             # Make background transparent
             fig.patch.set_alpha(0)
@@ -109,9 +115,9 @@ def main():
                         default='/orcd/data/ngk/001/users/emaliem/sts_communication')
     parser.add_argument('--condition_one', '-c1', type=str, default='face_third+face_first+com_phy+com_ind',
                          help='The first condition for the second level analysis')
-    parser.add_argument('--condition_two', '-c2', type=str, default='face_noncom+phy+ind_surface',
+    parser.add_argument('--condition_two', '-c2', type=str, default='face_noncom+phy+ind',
                          help='The second condition for the second level analysis')
-    parser.add_argument('--palette_name', type=str, default='Reds',
+    parser.add_argument('--palette_name', type=str, default='magma',
                          help='Seaborn color palette name')
     parser.add_argument('--task', '-t', type=str, default='communicate',
                          help='Task label for the analysis')
