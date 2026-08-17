@@ -10,7 +10,6 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap
 from tqdm import tqdm
 
-from nilearn.masking import intersect_masks
 from nilearn.datasets import fetch_surf_fsaverage
 from nilearn import plotting as nplot
 
@@ -23,6 +22,7 @@ ALL_CONTRASTS = DYAD_CONTRASTS + FACE_CONTRASTS
 CONTRAST_PAIRS = list(combinations(ALL_CONTRASTS, 2))
 PERCENT_THRESHOLDS = [0.05, 0.1, .2, .3, .4, .5, .6, .7, .8, .9, 1]
 SURFACE_PERCENT = 0.5  # threshold used for individual-subject surface overlap plots
+HEMIS = {'left': 'l', 'right': 'r'}  # display name -> parcel filename prefix
 
 
 def pair_type(contrast_a, contrast_b):
@@ -42,10 +42,12 @@ class VoxelOverlap:
     face-perception contrasts (face_first-face_noncom, face_third-face_noncom)
     within the anatomical STS parcel, in a single subject.
 
-    Voxels are ranked by t-value (positive values only, no significance
-    threshold) and the top X% of STS-parcel voxels are kept per contrast.
-    Overlap between two such binary masks is summarized with the Dice
-    coefficient, swept across several percent levels, for every pairwise
+    The left and right STS parcels are kept separate throughout: voxels are
+    ranked by t-value (positive values only, no significance threshold)
+    independently within each hemisphere's parcel, and the top X% of that
+    hemisphere's parcel is kept per contrast. Overlap between two such binary
+    masks is summarized with the Dice coefficient, computed separately per
+    hemisphere and swept across several percent levels, for every pairwise
     combination of the four contrasts above (including the two within-domain
     pairs, com_ind-ind vs com_phy-phy and face_first-face_noncom vs
     face_third-face_noncom, as a baseline for the cross-domain dyad-vs-face
@@ -72,10 +74,17 @@ class VoxelOverlap:
         return os.path.join(self.glm_path, f'sub-{self.subject}', f'task-{self.task_label}',
                              f'contrast-{contrast}_stat-tmap.nii.gz')
 
-    def load_sts_parcel(self):
-        """Union of left + right anatomical STS parcels."""
-        parcel_files = [os.path.join(self.parcel_path, f'{h}anatSTS.nii.gz') for h in ('l', 'r')]
-        return intersect_masks(parcel_files, threshold=0, connected=False)
+    def load_sts_parcels(self):
+        """Left and right anatomical STS parcels, kept separate. Returns
+        (hemi_masks, affine, header) where hemi_masks is {'left': bool array, 'right': bool array}."""
+        hemi_masks = {}
+        affine = header = None
+        for hemi, prefix in HEMIS.items():
+            img = nib.load(os.path.join(self.parcel_path, f'{prefix}anatSTS.nii.gz'))
+            hemi_masks[hemi] = img.get_fdata().astype(bool)
+            if affine is None:
+                affine, header = img.affine, img.header
+        return hemi_masks, affine, header
 
     @staticmethod
     def top_percent_mask(values, parcel_mask, percent):
@@ -104,7 +113,7 @@ class VoxelOverlap:
         overlap = np.logical_and(mask_a, mask_b).sum()
         return 2 * overlap / (n_a + n_b)
 
-    def compute_dice_table(self, sts_mask):
+    def compute_dice_table(self, hemi_masks):
         rows = []
         for contrast_a, contrast_b in CONTRAST_PAIRS:
             file_a = self.contrast_file(contrast_a)
@@ -115,20 +124,22 @@ class VoxelOverlap:
                 continue
             vals_a = nib.load(file_a).get_fdata()
             vals_b = nib.load(file_b).get_fdata()
-            for percent in PERCENT_THRESHOLDS:
-                mask_a = self.top_percent_mask(vals_a, sts_mask, percent)
-                mask_b = self.top_percent_mask(vals_b, sts_mask, percent)
-                rows.append({
-                    'subject': self.subject,
-                    'contrast_a': contrast_a,
-                    'contrast_b': contrast_b,
-                    'pair_type': pair_type(contrast_a, contrast_b),
-                    'percent_threshold': percent,
-                    'n_a_voxels': int(mask_a.sum()),
-                    'n_b_voxels': int(mask_b.sum()),
-                    'n_overlap_voxels': int(np.logical_and(mask_a, mask_b).sum()),
-                    'dice': self.dice(mask_a, mask_b),
-                })
+            for hemi, parcel_mask in hemi_masks.items():
+                for percent in PERCENT_THRESHOLDS:
+                    mask_a = self.top_percent_mask(vals_a, parcel_mask, percent)
+                    mask_b = self.top_percent_mask(vals_b, parcel_mask, percent)
+                    rows.append({
+                        'subject': self.subject,
+                        'hemisphere': hemi,
+                        'contrast_a': contrast_a,
+                        'contrast_b': contrast_b,
+                        'pair_type': pair_type(contrast_a, contrast_b),
+                        'percent_threshold': percent,
+                        'n_a_voxels': int(mask_a.sum()),
+                        'n_b_voxels': int(mask_b.sum()),
+                        'n_overlap_voxels': int(np.logical_and(mask_a, mask_b).sum()),
+                        'dice': self.dice(mask_a, mask_b),
+                    })
         df = pd.DataFrame(rows)
         outfile = os.path.join(self.subject_out_path, f'sub-{self.subject}_dice_coefficients.csv')
         df.to_csv(outfile, index=False)
@@ -147,7 +158,15 @@ class VoxelOverlap:
         }
         return fsaverage, meshes
 
-    def plot_subject_overlap(self, dyad_contrast, face_contrast, sts_mask, affine, header,
+    def top_percent_mask_bilateral(self, values, hemi_masks, percent):
+        """Union of the per-hemisphere top-`percent` selections (each hemisphere
+        ranked independently within its own parcel)."""
+        combined = np.zeros(values.shape, dtype=bool)
+        for parcel_mask in hemi_masks.values():
+            combined |= self.top_percent_mask(values, parcel_mask, percent)
+        return combined
+
+    def plot_subject_overlap(self, dyad_contrast, face_contrast, hemi_masks, affine, header,
                               fsaverage, fsaverage_meshes, percent):
         dyad_file = self.contrast_file(dyad_contrast)
         face_file = self.contrast_file(face_contrast)
@@ -156,8 +175,8 @@ class VoxelOverlap:
 
         dyad_vals = nib.load(dyad_file).get_fdata()
         face_vals = nib.load(face_file).get_fdata()
-        dyad_mask = self.top_percent_mask(dyad_vals, sts_mask, percent)
-        face_mask = self.top_percent_mask(face_vals, sts_mask, percent)
+        dyad_mask = self.top_percent_mask_bilateral(dyad_vals, hemi_masks, percent)
+        face_mask = self.top_percent_mask_bilateral(face_vals, hemi_masks, percent)
 
         dyad_img = nib.Nifti1Image(dyad_mask.astype(np.int8), affine, header)
         face_img = nib.Nifti1Image(face_mask.astype(np.int8), affine, header)
@@ -194,7 +213,7 @@ class VoxelOverlap:
                                   colorbar=False, bg_on_data=True, darkness=None, axes=ax_right, figure=fig)
         ax_right.set_title('Right Lateral', fontsize=12)
 
-        fig.text(0.03, 0.95, f'sub-{self.subject}: {dyad_contrast}  vs  {face_contrast}  (top {int(percent * 100)}%)',
+        fig.text(0.03, 0.95, f'sub-{self.subject}: {dyad_contrast}  vs  {face_contrast}  (top {int(percent * 100)}% per hemisphere)',
                   ha='left', va='top', fontsize=15, fontweight='bold')
         legend_labels = [(f'{dyad_contrast} only', colors[1]),
                           (f'{face_contrast} only', colors[2]),
@@ -208,19 +227,18 @@ class VoxelOverlap:
         fig.savefig(os.path.join(outdir, fname), dpi=200, bbox_inches='tight', facecolor='white')
         plt.close(fig)
 
-    def plot_all_surfaces(self, sts_mask, affine, header, percent=SURFACE_PERCENT):
+    def plot_all_surfaces(self, hemi_masks, affine, header, percent=SURFACE_PERCENT):
         fsaverage, fsaverage_meshes = self.load_fsaverage()
         for dyad_contrast, face_contrast in tqdm(list(product(DYAD_CONTRASTS, FACE_CONTRASTS)),
                                                    desc=f'sub-{self.subject} surfaces'):
-            self.plot_subject_overlap(dyad_contrast, face_contrast, sts_mask, affine, header,
+            self.plot_subject_overlap(dyad_contrast, face_contrast, hemi_masks, affine, header,
                                        fsaverage, fsaverage_meshes, percent)
 
     def run(self):
-        sts_img = self.load_sts_parcel()
-        sts_mask = sts_img.get_fdata().astype(bool)
+        hemi_masks, affine, header = self.load_sts_parcels()
 
-        self.compute_dice_table(sts_mask)
-        self.plot_all_surfaces(sts_mask, sts_img.affine, sts_img.header)
+        self.compute_dice_table(hemi_masks)
+        self.plot_all_surfaces(hemi_masks, affine, header)
 
 
 def main():
