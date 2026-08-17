@@ -75,3 +75,16 @@ random_effects:
 		python $(project_path)/code/plot_surfaces.py       -c1 $(C1) -c2 $(C2) -t $(TASK); \
 		echo $(C1) $(C2) $(TASK); \
 	)
+
+# Voxel-level overlap (Dice + individual-subject surfaces) between dyad and
+# face-perception contrasts within the STS parcel. Submits one SLURM job per
+# subject (code/batch_voxel_overlap.sh); run voxel_overlap_group once all
+# jobs finish.
+voxel_overlap:
+	for s in $(subs); do \
+		sbatch $(project_path)/code/batch_voxel_overlap.sh "$$s"; \
+	done
+
+# Aggregate per-subject Dice coefficients into a group table + summary plot
+voxel_overlap_group:
+	python $(project_path)/code/voxel_overlap_group.py

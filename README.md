@@ -43,6 +43,7 @@ sts_communication/
 │   ├── GroupParcelProbability/            # cross-subject probability maps of selectivity
 │   ├── PlotROISurfaces/                   # per-subject ROI surface renderings
 │   ├── SurfacePlots/                      # group surface visualizations
+│   ├── VoxelOverlap/                      # per-subject + group dyad-vs-face voxel overlap (Dice, surfaces)
 │   └── stimuli/                           # stimulus assets referenced by BIDS events
 └── code/
     ├── envs/nilearn.yml                   # conda spec for the analysis env (Python 3.13, nilearn 0.12)
@@ -57,6 +58,8 @@ sts_communication/
     ├── group_parcel_probability.py        # cross-subject selectivity probability maps
     ├── plot_surfaces.py                   # surface renderings of group stat maps
     ├── plot_roi_surfaces.py               # per-subject fROI surface renderings
+    ├── voxel_overlap.py                   # per-subject dyad-vs-face voxel overlap (Dice + surfaces) within STS
+    ├── voxel_overlap_group.py             # aggregate per-subject Dice tables into a group summary
     └── visualize_rois.py                  # QC of ROI/parcel overlays
 ```
 
@@ -84,6 +87,8 @@ The pipeline is orchestrated by the top-level [makefile](makefile) and consists 
 | 7. Group whole-brain random effects | `random_effects` | `code/group_random_effects.py`, `code/plot_surfaces.py` | `derivatives/GroupRandomEffects/`, `SurfacePlots/` |
 | 8. ROI surface visualizations | (script) | `code/plot_roi_surfaces.py` | `derivatives/PlotROISurfaces/` |
 | 9. Group parcel probability maps | (script) | `code/group_parcel_probability.py` | `derivatives/GroupParcelProbability/` |
+| 10. Dyad-vs-face voxel overlap (per subject) | `voxel_overlap` | `code/voxel_overlap.py` (one SLURM job per subject via `code/batch_voxel_overlap.sh`) | `derivatives/VoxelOverlap/sub-XX/` |
+| 11. Dyad-vs-face voxel overlap (group summary) | `voxel_overlap_group` | `code/voxel_overlap_group.py` | `derivatives/VoxelOverlap/group_dice_coefficients.csv`, `dice_group_summary.png` |
 
 ### Key analytical choices
 
@@ -93,6 +98,7 @@ The pipeline is orchestrated by the top-level [makefile](makefile) and consists 
 - **Anatomical parcels** are drawn from Julian et al. 2012 (FFA, EBA, DYLOC-STS), Ben Deen's anatomical STS parcel, the Saxe-lab TPJ parcel, and the Wang / Kastner probabilistic visuotopic atlas (EVC = V1–V4, MT). They are resampled to the fMRIPrep MNI grid by [code/parcels2mni.py](code/parcels2mni.py).
 - **Group ROI statistics** use paired one-sided *t*-tests across subjects on cross-validated betas ([code/group_runwise_results.py](code/group_runwise_results.py)).
 - **Group whole-brain inference** uses Nilearn's `non_parametric_inference` with TFCE, 10,000 sign-flip permutations, an additional 8 mm FWHM group-level smoothing kernel, and a one-sample intercept-only design ([code/group_random_effects.py](code/group_random_effects.py)).
+- **Dyad-vs-face voxel overlap** ([code/voxel_overlap.py](code/voxel_overlap.py)) asks, within each subject's anatomical STS parcel (union of left + right `anatSTS`), how much the voxels most driven by dyad contrasts (`com_ind-ind`, `com_phy-phy`) overlap with those most driven by face-perception contrasts (`face_first-face_noncom`, `face_third-face_noncom`). For each contrast, voxels are ranked by *t*-value (positive values only — no significance/p-value threshold), and the top *X* % of the parcel is kept, swept across percent levels from 5–100 %. Overlap between two such binary masks is summarized with the Dice coefficient, computed for all six pairwise combinations of the four contrasts (four cross-domain dyad-vs-face pairs plus the two within-domain pairs, `com_ind-ind` vs `com_phy-phy` and `face_first-face_noncom` vs `face_third-face_noncom`, as a same-domain baseline). Runs one subject at a time ([code/batch_voxel_overlap.sh](code/batch_voxel_overlap.sh), not tracked in git — site-specific SLURM config); [code/voxel_overlap_group.py](code/voxel_overlap_group.py) aggregates the per-subject Dice tables into a group CSV and summary plot faceted by pair type.
 
 ## Running the pipeline
 
@@ -110,6 +116,8 @@ make runwise_response       # per-subject ROI response tables
 make group_runwise          # group ROI summaries + paired t-tests + plots
 make first_level_models     # whole-brain first-level GLMs
 make random_effects         # whole-brain group TFCE + surface plots
+make voxel_overlap          # dyad-vs-face voxel overlap: submits one SLURM job per subject
+make voxel_overlap_group    # ...then aggregate into a group Dice table + summary plot
 
 # Or run the whole pipeline in order:
 make all
@@ -122,6 +130,8 @@ python code/nilearn_glm_runwise.py   -s 02 -t communicate
 python code/runwise_response.py      -s 2
 python code/group_runwise_results.py 01 02 03 04 05 07 08 09 11 12 13 14 15 16 18 19 20 21 22 23 --overwrite
 python code/group_random_effects.py  -c1 interact -c2 noninteract -t pointlight
+python code/voxel_overlap.py         -s 02   # one subject; repeat for each, or submit via `make voxel_overlap`
+python code/voxel_overlap_group.py         # after all subjects have been run
 python code/plot_surfaces.py         -c1 interact -c2 noninteract -t pointlight
 ```
 
