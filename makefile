@@ -88,3 +88,30 @@ voxel_overlap:
 # Aggregate per-subject Dice coefficients into a group table + summary plot
 voxel_overlap_group:
 	python $(project_path)/code/voxel_overlap_group.py
+
+# Split-half (odd vs even runs) reliability of the pointlight interact-noninteract
+# contrast within the STS parcel, from NilearnGLMRunwise per-run outputs.
+# Submits one SLURM job per subject. Group-level aggregation happens together
+# with voxel_overlap_communicate_pointlight_group below (split-half serves as
+# that comparison's noise ceiling), so there is no separate group target here.
+voxel_overlap_pointlight_splithalf:
+	for s in $(subs); do \
+		sbatch $(project_path)/code/batch_voxel_overlap_pointlight_splithalf.sh "$$s"; \
+	done
+
+# Voxel-level overlap between each communicate contrast and the pointlight
+# interact-noninteract contrast within the STS parcel, from NilearnGLM
+# whole-brain outputs. Submits one SLURM job per subject; run the _group
+# target once both this and voxel_overlap_pointlight_splithalf have finished
+# for all subjects.
+voxel_overlap_communicate_pointlight:
+	for s in $(subs); do \
+		sbatch $(project_path)/code/batch_voxel_overlap_communicate_pointlight.sh "$$s"; \
+	done
+
+# Aggregates BOTH voxel_overlap_communicate_pointlight and
+# voxel_overlap_pointlight_splithalf per-subject results: group Dice tables
+# for each, plus a combined summary plot with the split-half reliability
+# overlaid as a noise-ceiling reference on the communicate-vs-pointlight curves.
+voxel_overlap_communicate_pointlight_group:
+	python $(project_path)/code/voxel_overlap_communicate_pointlight_group.py

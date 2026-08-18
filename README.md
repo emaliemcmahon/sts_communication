@@ -44,10 +44,12 @@ sts_communication/
 │   ├── PlotROISurfaces/                   # per-subject ROI surface renderings
 │   ├── SurfacePlots/                      # group surface visualizations
 │   ├── VoxelOverlap/                      # per-subject + group dyad-vs-face voxel overlap (Dice, surfaces)
+│   ├── VoxelOverlapPointlightSplitHalf/   # per-subject pointlight odd-vs-even split-half overlap (Dice, surfaces)
+│   ├── VoxelOverlapCommunicatePointlight/ # per-subject communicate-vs-pointlight voxel overlap (Dice, surfaces)
 │   └── stimuli/                           # stimulus assets referenced by BIDS events
 └── code/
     ├── envs/nilearn.yml                   # conda spec for the analysis env (Python 3.13, nilearn 0.12)
-    ├── utils/                             # helpers (mri.py, stats.py)
+    ├── utils/                             # helpers (mri.py, stats.py, overlap.py)
     ├── run_fmriprep.sh                    # exact fMRIPrep 24.1.1 call used to produce derivatives/fmriprep/
     ├── parcels2mni.py                     # resample atlas parcels to fMRIPrep MNI grid
     ├── nilearn_glm.py                     # whole-brain first-level GLM per subject/task
@@ -60,6 +62,9 @@ sts_communication/
     ├── plot_roi_surfaces.py               # per-subject fROI surface renderings
     ├── voxel_overlap.py                   # per-subject dyad-vs-face voxel overlap (Dice + surfaces) within STS
     ├── voxel_overlap_group.py             # aggregate per-subject Dice tables into a group summary
+    ├── voxel_overlap_pointlight_splithalf.py         # per-subject pointlight odd-vs-even split-half overlap
+    ├── voxel_overlap_communicate_pointlight.py       # per-subject communicate-vs-pointlight voxel overlap
+    ├── voxel_overlap_communicate_pointlight_group.py # group summary for both of the above, split-half as ceiling
     └── visualize_rois.py                  # QC of ROI/parcel overlays
 ```
 
@@ -89,6 +94,9 @@ The pipeline is orchestrated by the top-level [makefile](makefile) and consists 
 | 9. Group parcel probability maps | (script) | `code/group_parcel_probability.py` | `derivatives/GroupParcelProbability/` |
 | 10. Dyad-vs-face voxel overlap (per subject) | `voxel_overlap` | `code/voxel_overlap.py` (one SLURM job per subject via `code/batch_voxel_overlap.sh`) | `derivatives/VoxelOverlap/sub-XX/` |
 | 11. Dyad-vs-face voxel overlap (group summary) | `voxel_overlap_group` | `code/voxel_overlap_group.py` | `derivatives/VoxelOverlap/group_dice_coefficients.csv`, `dice_group_summary.png` |
+| 12. Pointlight split-half overlap (per subject) | `voxel_overlap_pointlight_splithalf` | `code/voxel_overlap_pointlight_splithalf.py` (one SLURM job per subject) | `derivatives/VoxelOverlapPointlightSplitHalf/sub-XX/` |
+| 13. Communicate-vs-pointlight voxel overlap (per subject) | `voxel_overlap_communicate_pointlight` | `code/voxel_overlap_communicate_pointlight.py` (one SLURM job per subject) | `derivatives/VoxelOverlapCommunicatePointlight/sub-XX/` |
+| 14. Communicate-vs-pointlight overlap (group summary, split-half as noise ceiling) | `voxel_overlap_communicate_pointlight_group` | `code/voxel_overlap_communicate_pointlight_group.py` | `derivatives/VoxelOverlapCommunicatePointlight/group_dice_coefficients.csv`, `dice_group_summary.png`; `derivatives/VoxelOverlapPointlightSplitHalf/group_dice_coefficients.csv`, `dice_group_summary.png` |
 
 ### Key analytical choices
 
@@ -98,7 +106,9 @@ The pipeline is orchestrated by the top-level [makefile](makefile) and consists 
 - **Anatomical parcels** are drawn from Julian et al. 2012 (FFA, EBA, DYLOC-STS), Ben Deen's anatomical STS parcel, the Saxe-lab TPJ parcel, and the Wang / Kastner probabilistic visuotopic atlas (EVC = V1–V4, MT). They are resampled to the fMRIPrep MNI grid by [code/parcels2mni.py](code/parcels2mni.py).
 - **Group ROI statistics** use paired one-sided *t*-tests across subjects on cross-validated betas ([code/group_runwise_results.py](code/group_runwise_results.py)).
 - **Group whole-brain inference** uses Nilearn's `non_parametric_inference` with TFCE, 10,000 sign-flip permutations, an additional 8 mm FWHM group-level smoothing kernel, and a one-sample intercept-only design ([code/group_random_effects.py](code/group_random_effects.py)).
-- **Dyad-vs-face voxel overlap** ([code/voxel_overlap.py](code/voxel_overlap.py)) asks, within each subject's left and right anatomical STS parcels (`anatSTS`, kept separate throughout — never pooled across hemispheres), how much the voxels most driven by dyad contrasts (`com_ind-ind`, `com_phy-phy`) overlap with those most driven by face-perception contrasts (`face_first-face_noncom`, `face_third-face_noncom`). For each contrast and each hemisphere independently, voxels are ranked by *t*-value (positive values only — no significance/p-value threshold), and the top *X* % of that hemisphere's parcel is kept, swept across percent levels from 5–100 %. Overlap between two such binary masks is summarized with the Dice coefficient, computed separately per hemisphere for all six pairwise combinations of the four contrasts (four cross-domain dyad-vs-face pairs plus the two within-domain pairs, `com_ind-ind` vs `com_phy-phy` and `face_first-face_noncom` vs `face_third-face_noncom`, as a same-domain baseline). Runs one subject at a time ([code/batch_voxel_overlap.sh](code/batch_voxel_overlap.sh), not tracked in git — site-specific SLURM config); [code/voxel_overlap_group.py](code/voxel_overlap_group.py) aggregates the per-subject Dice tables into a group CSV and summary plot faceted by hemisphere and pair type.
+- **Dyad-vs-face voxel overlap** ([code/voxel_overlap.py](code/voxel_overlap.py)) asks, within each subject's left and right anatomical STS parcels (`anatSTS`, kept separate throughout — never pooled across hemispheres), how much the voxels most driven by dyad contrasts (`com_ind-ind`, `com_phy-phy`) overlap with those most driven by face-perception contrasts (`face_first-face_noncom`, `face_third-face_noncom`). For each contrast and each hemisphere independently, voxels are ranked by *t*-value (positive values only — no significance/p-value threshold), and the top *X* % of that hemisphere's parcel is kept, swept across percent levels from 5–100 %. Overlap between two such binary masks is summarized with the Dice coefficient, computed separately per hemisphere for all six pairwise combinations of the four contrasts (four cross-domain dyad-vs-face pairs plus the two within-domain pairs, `com_ind-ind` vs `com_phy-phy` and `face_first-face_noncom` vs `face_third-face_noncom`, as a same-domain baseline). Runs one subject at a time ([code/batch_voxel_overlap.sh](code/batch_voxel_overlap.sh), not tracked in git — site-specific SLURM config); [code/voxel_overlap_group.py](code/voxel_overlap_group.py) aggregates the per-subject Dice tables into a group CSV and summary plot faceted by hemisphere and pair type. The shared voxel-selection, Dice, and surface-plotting logic used by this and the two overlap analyses below lives in [code/utils/overlap.py](code/utils/overlap.py).
+- **Pointlight split-half overlap** ([code/voxel_overlap_pointlight_splithalf.py](code/voxel_overlap_pointlight_splithalf.py)) establishes a reliability baseline for the `interact-noninteract` contrast itself: within each hemisphere's STS parcel, it compares the top-*X* % voxels defined from odd pointlight runs (1, 3) against those from even runs (2, 4). The odd/even contrast maps are built from NilearnGLMRunwise's per-run, single-run effect-size estimates for the `interact` and `noninteract` conditions (`contrast-{interact,noninteract}_run-N.nii.gz`, each fit on that one run alone) — averaging `interact - noninteract` across the two runs in each half. This is a different quantity from NilearnGLMRunwise's own `contrast-interact-noninteract_run-N.nii.gz` files, which are leave-one-run-out z-score maps used for fROI definition (fit on the 3 runs *other than* N) and do not correspond to an odd/even split.
+- **Communicate-vs-pointlight voxel overlap** ([code/voxel_overlap_communicate_pointlight.py](code/voxel_overlap_communicate_pointlight.py)) applies the same top-percent/Dice approach to ask how much each of the four communicate contrasts overlaps with the pointlight `interact-noninteract` contrast, using the whole-brain NilearnGLM t-maps for both (not the cross-validated Runwise outputs). [code/voxel_overlap_communicate_pointlight_group.py](code/voxel_overlap_communicate_pointlight_group.py) aggregates *both* this analysis and the pointlight split-half analysis together: the split-half Dice is plotted as a gray noise-ceiling reference curve on every communicate-vs-pointlight panel, since split-half reliability (how much `interact-noninteract` overlaps with itself across independent data) upper-bounds how much overlap any independent contrast could plausibly show.
 
 ## Running the pipeline
 
@@ -118,6 +128,9 @@ make first_level_models     # whole-brain first-level GLMs
 make random_effects         # whole-brain group TFCE + surface plots
 make voxel_overlap          # dyad-vs-face voxel overlap: submits one SLURM job per subject
 make voxel_overlap_group    # ...then aggregate into a group Dice table + summary plot
+make voxel_overlap_pointlight_splithalf     # pointlight split-half reliability: one SLURM job per subject
+make voxel_overlap_communicate_pointlight   # communicate-vs-pointlight overlap: one SLURM job per subject
+make voxel_overlap_communicate_pointlight_group  # ...then aggregate both (split-half as noise ceiling)
 
 # Or run the whole pipeline in order:
 make all
@@ -132,6 +145,9 @@ python code/group_runwise_results.py 01 02 03 04 05 07 08 09 11 12 13 14 15 16 1
 python code/group_random_effects.py  -c1 interact -c2 noninteract -t pointlight
 python code/voxel_overlap.py         -s 02   # one subject; repeat for each, or submit via `make voxel_overlap`
 python code/voxel_overlap_group.py         # after all subjects have been run
+python code/voxel_overlap_pointlight_splithalf.py    -s 02   # one subject; repeat for each
+python code/voxel_overlap_communicate_pointlight.py  -s 02   # one subject; repeat for each
+python code/voxel_overlap_communicate_pointlight_group.py  # after both of the above have been run for all subjects
 python code/plot_surfaces.py         -c1 interact -c2 noninteract -t pointlight
 ```
 
