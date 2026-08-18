@@ -146,11 +146,9 @@ class VoxelOverlapCommunicatePointlightGroup:
             # Noise ceiling: shaded 95% CI band (bootstrap over participants)
             ceiling_wide = pivot_wide(splithalf_df[splithalf_df['hemisphere'] == hemi])
             ceiling_percents = ceiling_wide.columns.to_numpy() * 100
-            ceiling_mean, ceiling_lower, ceiling_upper = bootstrap_mean_ci(ceiling_wide)
+            _, ceiling_lower, ceiling_upper = bootstrap_mean_ci(ceiling_wide)
             ax.fill_between(ceiling_percents, ceiling_lower.to_numpy(), ceiling_upper.to_numpy(),
                              color=CEILING_COLOR, alpha=0.25, label='pointlight split-half (ceiling)', zorder=1)
-            ax.plot(ceiling_percents, ceiling_mean.to_numpy(), color=CEILING_COLOR,
-                     linestyle='--', linewidth=1.5, zorder=1)
 
             # Communicate-vs-pointlight overlap: one line per contrast, bootstrap 95% CI error bars
             for contrast, offset in zip(contrasts, offsets):
