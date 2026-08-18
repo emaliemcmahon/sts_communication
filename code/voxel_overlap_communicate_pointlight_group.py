@@ -2,15 +2,52 @@ import argparse
 import os
 from glob import glob
 
+import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import seaborn as sns
 
 HEMISPHERE_ORDER = ['left', 'right']
 CONTRAST_ORDER = ['com_ind-ind', 'com_phy-phy', 'face_first-face_noncom', 'face_third-face_noncom']
-COMPARISON_LABEL = 'communicate vs pointlight'
-CEILING_LABEL = 'pointlight split-half (ceiling)'
-PALETTE = {COMPARISON_LABEL: 'darkorange', CEILING_LABEL: 'gray'}
+CONTRAST_COLORS = {
+    'com_ind-ind': '#1b9e77',
+    'com_phy-phy': '#d95f02',
+    'face_first-face_noncom': '#7570b3',
+    'face_third-face_noncom': '#e7298a',
+}
+CEILING_COLOR = '0.5'
+N_BOOT = 2000
+CI = 95
+BOOT_SEED = 0
+
+
+def pivot_wide(df, value_col='dice', index_col='subject', columns_col='percent_threshold'):
+    """subjects (rows) x condition (columns, e.g. percent_threshold), values = statistic."""
+    return df.pivot(index=index_col, columns=columns_col, values=value_col).sort_index(axis=1)
+
+
+def bootstrap_mean_ci(wide_df, n_boot=N_BOOT, ci=CI, seed=BOOT_SEED):
+    """
+    Percentile-method bootstrap CI, resampling participants (rows of wide_df)
+    with replacement, jointly across all columns within each draw.
+
+    Returns (observed_mean, ci_lower, ci_upper), each a pandas Series indexed
+    like wide_df.columns.
+    """
+    rng = np.random.default_rng(seed)
+    values = wide_df.to_numpy()
+    n_subjects = values.shape[0]
+    observed_mean = values.mean(axis=0)
+
+    boot_idx = rng.integers(0, n_subjects, size=(n_boot, n_subjects))
+    boot_means = values[boot_idx].mean(axis=1)  # (n_boot, n_conditions)
+
+    alpha = (100 - ci) / 2
+    lower = np.percentile(boot_means, alpha, axis=0)
+    upper = np.percentile(boot_means, 100 - alpha, axis=0)
+
+    return (pd.Series(observed_mean, index=wide_df.columns),
+            pd.Series(lower, index=wide_df.columns),
+            pd.Series(upper, index=wide_df.columns))
 
 
 class VoxelOverlapCommunicatePointlightGroup:
@@ -18,12 +55,14 @@ class VoxelOverlapCommunicatePointlightGroup:
     Aggregate per-subject Dice tables from voxel_overlap_communicate_pointlight.py
     (each communicate contrast vs. pointlight interact-noninteract) and from
     voxel_overlap_pointlight_splithalf.py (pointlight interact-noninteract,
-    odd vs even runs) into group tables, plus a combined summary plot that
-    overlays the split-half Dice as a noise-ceiling reference curve on every
-    communicate-vs-pointlight panel. Split-half reliability is how much the
-    pointlight contrast overlaps with *itself* across independent halves of
-    the data, which upper-bounds how much overlap you could plausibly see
-    with any other, independent contrast.
+    odd vs even runs) into group tables, plus a combined summary plot: one
+    panel per hemisphere, all four communicate contrasts overlaid in
+    different colors, with the split-half Dice shown as a shaded 95% CI band
+    (a noise ceiling — how much the pointlight contrast overlaps with
+    *itself* across independent halves of the data, which upper-bounds how
+    much overlap any other, independent contrast could plausibly show).
+    All uncertainty (the ceiling band and the per-contrast error bars alike)
+    is a 95% CI from bootstrapping participants.
     """
 
     def __init__(self, args):
@@ -60,23 +99,30 @@ class VoxelOverlapCommunicatePointlightGroup:
         print(f'Saved {splithalf_outfile}')
 
     def plot_splithalf_summary(self, splithalf_df):
-        """Standalone pointlight split-half reliability plot (the ceiling on its own)."""
-        plot_df = splithalf_df.copy()
-        plot_df['percent_label'] = (plot_df['percent_threshold'] * 100).round().astype(int)
-        hemispheres = [h for h in HEMISPHERE_ORDER if h in plot_df['hemisphere'].unique()]
+        """Standalone pointlight split-half reliability plot (the ceiling on its own),
+        one panel per hemisphere, with a bootstrap 95% CI error bar at each percent level."""
+        hemispheres = [h for h in HEMISPHERE_ORDER if h in splithalf_df['hemisphere'].unique()]
 
         fig, axes = plt.subplots(1, len(hemispheres), figsize=(6.5 * len(hemispheres), 6),
                                   sharey=True, squeeze=False)
         axes = axes[0]
+
         for ax, hemi in zip(axes, hemispheres):
-            sub_df = plot_df[plot_df['hemisphere'] == hemi]
-            sns.pointplot(data=sub_df, x='percent_label', y='dice', errorbar='se', ax=ax, color='gray')
-            sns.stripplot(data=sub_df, x='percent_label', y='dice', alpha=0.25, ax=ax, color='gray')
+            wide = pivot_wide(splithalf_df[splithalf_df['hemisphere'] == hemi])
+            percents = wide.columns.to_numpy() * 100
+            mean, lower, upper = bootstrap_mean_ci(wide)
+            yerr = np.vstack([mean.to_numpy() - lower.to_numpy(), upper.to_numpy() - mean.to_numpy()])
+
+            for _, row in wide.iterrows():
+                ax.plot(percents, row.to_numpy(), color=CEILING_COLOR, alpha=0.15, linewidth=0.8, zorder=1)
+            ax.errorbar(percents, mean.to_numpy(), yerr=yerr, marker='o', markersize=5, capsize=3,
+                        color=CEILING_COLOR, zorder=2)
             ax.set_title(f'{hemi} hemisphere')
             ax.set_xlabel('Top % of STS parcel (by effect size)')
 
         axes[0].set_ylabel('Dice coefficient (odd vs even runs)')
-        fig.suptitle('Pointlight interact-noninteract: split-half reliability within STS')
+        fig.suptitle('Pointlight interact-noninteract: split-half reliability within STS\n'
+                      '(error bars = 95% CI, bootstrapped across participants)')
         fig.tight_layout()
         outfile = os.path.join(self.splithalf_path, 'dice_group_summary.png')
         fig.savefig(outfile, dpi=300, bbox_inches='tight')
@@ -84,43 +130,47 @@ class VoxelOverlapCommunicatePointlightGroup:
         print(f'Saved {outfile}')
 
     def plot_comparison_summary(self, communicate_df, splithalf_df):
-        """Communicate-vs-pointlight Dice with the split-half ceiling overlaid on every panel."""
-        plot_df = communicate_df.copy()
-        plot_df['percent_label'] = (plot_df['percent_threshold'] * 100).round().astype(int)
+        """One panel per hemisphere: all communicate contrasts overlaid (bootstrap 95% CI
+        error bars), with the pointlight split-half Dice shown as a shaded 95% CI band."""
+        hemispheres = [h for h in HEMISPHERE_ORDER if h in communicate_df['hemisphere'].unique()]
+        contrasts = [c for c in CONTRAST_ORDER if c in communicate_df['communicate_contrast'].unique()]
 
-        ceiling_df = splithalf_df.copy()
-        ceiling_df['percent_label'] = (ceiling_df['percent_threshold'] * 100).round().astype(int)
+        fig, axes = plt.subplots(1, len(hemispheres), figsize=(7 * len(hemispheres), 6),
+                                  sharey=True, squeeze=False)
+        axes = axes[0]
 
-        hemispheres = [h for h in HEMISPHERE_ORDER if h in plot_df['hemisphere'].unique()]
-        contrasts = [c for c in CONTRAST_ORDER if c in plot_df['communicate_contrast'].unique()]
+        # small x-offsets so overlapping contrasts' error bars stay legible
+        offsets = np.linspace(-1.5, 1.5, len(contrasts))
 
-        fig, axes = plt.subplots(len(hemispheres), len(contrasts),
-                                  figsize=(5 * len(contrasts), 5 * len(hemispheres)),
-                                  sharey=True, sharex=True, squeeze=False)
+        for ax, hemi in zip(axes, hemispheres):
+            # Noise ceiling: shaded 95% CI band (bootstrap over participants)
+            ceiling_wide = pivot_wide(splithalf_df[splithalf_df['hemisphere'] == hemi])
+            ceiling_percents = ceiling_wide.columns.to_numpy() * 100
+            ceiling_mean, ceiling_lower, ceiling_upper = bootstrap_mean_ci(ceiling_wide)
+            ax.fill_between(ceiling_percents, ceiling_lower.to_numpy(), ceiling_upper.to_numpy(),
+                             color=CEILING_COLOR, alpha=0.25, label='pointlight split-half (ceiling)', zorder=1)
+            ax.plot(ceiling_percents, ceiling_mean.to_numpy(), color=CEILING_COLOR,
+                     linestyle='--', linewidth=1.5, zorder=1)
 
-        for i, hemi in enumerate(hemispheres):
-            ceiling_hemi_df = ceiling_df[ceiling_df['hemisphere'] == hemi].copy()
-            ceiling_hemi_df['series'] = CEILING_LABEL
+            # Communicate-vs-pointlight overlap: one line per contrast, bootstrap 95% CI error bars
+            for contrast, offset in zip(contrasts, offsets):
+                contrast_wide = pivot_wide(
+                    communicate_df[(communicate_df['hemisphere'] == hemi)
+                                   & (communicate_df['communicate_contrast'] == contrast)])
+                c_percents = contrast_wide.columns.to_numpy() * 100
+                c_mean, c_lower, c_upper = bootstrap_mean_ci(contrast_wide)
+                yerr = np.vstack([c_mean.to_numpy() - c_lower.to_numpy(), c_upper.to_numpy() - c_mean.to_numpy()])
+                ax.errorbar(c_percents + offset, c_mean.to_numpy(), yerr=yerr, marker='o', markersize=5,
+                            capsize=3, linestyle='-', color=CONTRAST_COLORS[contrast], label=contrast, zorder=2)
 
-            for j, contrast in enumerate(contrasts):
-                ax = axes[i][j]
-                sub_df = plot_df[(plot_df['hemisphere'] == hemi)
-                                  & (plot_df['communicate_contrast'] == contrast)].copy()
-                sub_df['series'] = COMPARISON_LABEL
-                panel_df = pd.concat([sub_df, ceiling_hemi_df], ignore_index=True)
+            ax.set_title(f'{hemi} hemisphere')
+            ax.set_xlabel('Top % of STS parcel (by t-value)')
 
-                sns.pointplot(data=panel_df, x='percent_label', y='dice', hue='series',
-                               palette=PALETTE, dodge=0.2, errorbar='se', ax=ax)
-                ax.set_title(f'{hemi}: {contrast}' if i == 0 else contrast, fontsize=10)
-                ax.set_xlabel('Top % of STS parcel (by t-value)' if i == len(hemispheres) - 1 else '')
-                ax.set_ylabel(f'{hemi} hemisphere\nDice coefficient' if j == 0 else '')
-                if i == 0 and j == 0:
-                    ax.legend(fontsize=8, loc='upper left', title=None)
-                elif ax.get_legend() is not None:
-                    ax.get_legend().remove()
-
+        axes[0].set_ylabel('Dice coefficient')
+        axes[0].legend(fontsize=9, loc='upper left')
         fig.suptitle('Voxel-level overlap within STS: communicate contrasts vs. pointlight interact-noninteract\n'
-                      '(gray = pointlight odd/even split-half reliability, as a noise ceiling)')
+                      '(shaded band = pointlight split-half 95% CI, as a noise ceiling; '
+                      'error bars = 95% CI, both bootstrapped across participants)')
         fig.tight_layout()
         outfile = os.path.join(self.communicate_pointlight_path, 'dice_group_summary.png')
         fig.savefig(outfile, dpi=300, bbox_inches='tight')
