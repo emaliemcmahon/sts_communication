@@ -17,19 +17,11 @@ n_runs = {'pointlight': 4, 'tom': 2, 'communicate': 9}
 
 
 roi_size = {'EVC': 0.05, 'MT': 0.1,
-            'comind-STS': .05,
-            'comphy-STS': 0.05,
-            'facecom-STS': 0.05,
-            'dyadcom-STS': 0.05,
-            'com-STS': .05,
-            'phy-STS': .05,
-            'FFA': .1, 'fSTS': .1, 
+            'FFA': .1, 'fSTS': .1,
             'EBA': .1, 'SI-STS': .05,
             'TPJ': .1}
 
-task_rois = {'communicate': ['EVC', 'MT', 'FFA', 'EBA', 'fSTS',
-                             'comind-STS', 'comphy-STS', 'facecom-STS', 
-                             'dyadcom-STS', 'com-STS', 'phy-STS'],
+task_rois = {'communicate': ['EVC', 'MT', 'FFA', 'EBA', 'fSTS'],
              'pointlight': ['SI-STS'],
              'tom': ['TPJ']}
 

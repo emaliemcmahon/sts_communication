@@ -6,21 +6,12 @@ import matplotlib.pyplot as plt
 import nibabel as nib
 
 
-roi_size = {'comphy-STS': .05, 'comind-STS': .05, 'TPJ': .1,
-            'dyadcom-STS': .05, 'facecom-STS': .05,
+roi_size = {'TPJ': .1,
             'EBA': .1, 'fSTS': .1, 'FFA': .1, 'SI-STS': .05,
-            'EVC': 0.05, 'MT': 0.1, 
-            'com-STS': .05,
-            'phy-STS': 0.05}
+            'EVC': 0.05, 'MT': 0.1}
 
 
-roi_parc = {'comphy-STS': 'anatSTS',
-            'comind-STS': 'anatSTS',
-            'facecom-STS': 'anatSTS',
-            'dyadcom-STS': 'anatSTS',
-            'SI-STS': 'anatSTS', 
-            'com-STS': 'anatSTS',
-            'phy-STS': 'anatSTS'}
+roi_parc = {'SI-STS': 'anatSTS'}
 
 
 def roi_switcher(roi):

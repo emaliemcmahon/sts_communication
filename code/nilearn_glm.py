@@ -40,7 +40,6 @@ class NilearnGLM:
         self.space_label = args.space_label
         self.sub_num = args.sub
         self.subj = str(self.sub_num).zfill(2)
-        self.frame_threshold = 12  # Threshold for number of removed frames per run
         self.contrasts = contrasts.get(self.task_label)
         assert self.task_label in contrasts.keys(), f"Unknown task {self.task_label}"
         print(vars(self))
@@ -98,6 +97,18 @@ class NilearnGLM:
             tmap = model.compute_contrast(contrast, stat_type='t', output_type='stat')
             nib.save(tmap, f'{self.out_path}/sub-{self.subj}/task-{self.task_label}/contrast-{contrast_name}_stat-tmap.nii.gz')
             self.save_map_for_parcel(tmap, contrast_name)
+
+        # Compute and save each condition's beta (effect size) vs. fixation baseline,
+        # for downstream multivariate (RSA/decoding) analyses
+        condition_names = sorted({
+            trial_type
+            for event_df in events_shifted
+            for trial_type in event_df['trial_type'].unique()
+        })
+        for condition in tqdm(condition_names, total=len(condition_names), desc='Computing condition betas'):
+            contrast = parse_contrast(model, condition, None)
+            beta_map = model.compute_contrast(contrast, output_type='effect_size')
+            nib.save(beta_map, f'{self.out_path}/sub-{self.subj}/task-{self.task_label}/contrast-{condition}_stat-beta.nii.gz')
 
 
 def main():

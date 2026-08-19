@@ -20,7 +20,7 @@ class VisualizeROIs:
         self.out_file = f'{self.out_path}/sub-{self.subject_label}_fROIs'
         self.hemis = ['l', 'r']
         self.rois = ['EVC', 'MT', 'FFA', 'EBA', 'fSTS',
-                     'SI-STS', 'TPJ', 'facecom-STS', 'dyadcom-STS']
+                     'SI-STS', 'TPJ']
         Path(self.out_path).mkdir(parents=True, exist_ok=True)
     
     def load_rois(self):

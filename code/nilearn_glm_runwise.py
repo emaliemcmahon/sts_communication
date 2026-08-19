@@ -25,16 +25,10 @@ response_contrasts = {'pointlight': ['interact', 'noninteract'],
                     'face_third', 'face_first', 'face_noncom',
                     'body', 'object']}
 
-froi_contrasts = {'pointlight': {'interact-noninteract': ['SI-STS']}, 
+froi_contrasts = {'pointlight': {'interact-noninteract': ['SI-STS']},
                 'tom': {'belief-photo': ['TPJ']},
-                  'communicate': {'face_third+face_first+com_phy+com_ind-face_noncom+phy+ind': ['com-STS'],
-                                  'body-object': ['EBA'],
+                  'communicate': {'body-object': ['EBA'],
                                   'face_third+face_noncom-object': ['fSTS', 'FFA'],
-                                  'phy-ind': ['phy-STS'],
-                                  'com_phy-phy': ['comphy-STS'],
-                                  'com_ind-ind': ['comind-STS'],
-                                  'com_phy+com_ind-phy+ind': ['dyadcom-STS'],
-                                  'face_third+face_first-face_noncom': ['facecom-STS'],
                                   'com_phy+phy+com_ind+ind+face_third+face_first+face_noncom+object+body': ['EVC', 'MT']}}
 
 

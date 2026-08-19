@@ -83,10 +83,7 @@ class GroupRunwiseResults:
                                     'interact', 'noninteract',
                                     'belief', 'photo']
         self.hemis = ['l', 'r']
-        self.rois = ['EVC', 'MT', 'FFA', 'EBA', 
-                     'fSTS', 'SI-STS', 'TPJ', 'com-STS', 
-                     'facecom-STS', 'dyadcom-STS',
-                     'comind-STS', 'comphy-STS', 'phy-STS']
+        self.rois = ['EVC', 'MT', 'FFA', 'EBA', 'fSTS', 'SI-STS', 'TPJ']
         Path(self.out_path).mkdir(exist_ok=True, parents=True)
 
     def plot_roi_summary(self, df, stats, hemi='r', 
@@ -162,9 +159,8 @@ class GroupRunwiseResults:
         fig.tight_layout()
         fig.savefig(f'{self.out_path}/{hemi}h_summary.pdf')
 
-    def plot_individual_rois(self, df, stats, hemi='r', 
-                            rois=['fSTS', 'SI-STS', #'com-STS', 
-                                  'comind-STS', 'comphy-STS', 'FFA', 'phy-STS']):
+    def plot_individual_rois(self, df, stats, hemi='r',
+                            rois=['fSTS', 'SI-STS', 'FFA']):
         sns.set_context('poster')
         
         if self.plot_object_body:

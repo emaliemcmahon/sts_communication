@@ -34,14 +34,16 @@ runwise_response:
 group_runwise:
 	python $(project_path)/code/group_runwise_results.py $(subs) $(GROUP_RUNWISE_FLAGS)
 
-# Whole-brain first-level GLMs (one t-map per contrast per subject)
+# Whole-brain first-level GLMs (one t-map per contrast, plus one condition-vs-
+# baseline beta map per condition, per subject). Submits one SLURM job per
+# subject/task (code/batch_nilearn_glm.sh).
 first_level_models:
 	for s in $(subs); do \
-		python $(project_path)/code/nilearn_glm.py -s "$$s" -t communicate; \
-		python $(project_path)/code/nilearn_glm.py -s "$$s" -t pointlight; \
+		sbatch $(project_path)/code/batch_nilearn_glm.sh "$$s" communicate; \
+		sbatch $(project_path)/code/batch_nilearn_glm.sh "$$s" pointlight; \
 	done
 	for s in $(tom_subs); do \
-		python $(project_path)/code/nilearn_glm.py -s "$$s" -t tom; \
+		sbatch $(project_path)/code/batch_nilearn_glm.sh "$$s" tom; \
 	done
 
 # Contrasts for the group-level (whole-brain) random-effects analyses.

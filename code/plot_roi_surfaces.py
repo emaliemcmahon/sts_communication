@@ -15,8 +15,7 @@ from nilearn.datasets import fetch_surf_fsaverage
 
 task_contrasts = {'communicate': {'com_phy+phy+com_ind+ind+face_third+face_first+face_noncom+object+body': ['MT'],
                                   'body-object': ['EBA'],
-                                  'face_third+face_noncom-object': ['fSTS'],
-                                  'face_third+face_first+com_phy+com_ind-face_noncom+phy+ind': ['com-STS']}, 
+                                  'face_third+face_noncom-object': ['fSTS']},
                     'pointlight': {'interact-noninteract': ['SI-STS']},
                   'tom': {'belief-photo': ['TPJ']}}
 
