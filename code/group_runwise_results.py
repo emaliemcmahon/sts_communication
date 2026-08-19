@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 from itertools import permutations
 from scipy.stats import ttest_rel
+import pingouin as pg
 import numpy as np
 from matplotlib.collections import  PathCollection
 from itertools import product 
@@ -30,6 +31,12 @@ condition_rename = {'com_phy': 'com-joint', 'phy': 'joint',
                     'com_ind': 'com-ind',
                     'face_first': 'face-first', 'face_third': 'face-third',
                     'face_noncom': 'face-noncom'}
+
+# 2x2 within-subject design: group (dyad vs. individual) x interact (interact vs. noninteract)
+anova_factors = {'com-ind': ('dyad', 'interact'),
+                  'ind': ('dyad', 'noninteract'),
+                  'face-first': ('individual', 'interact'),
+                  'face-noncom': ('individual', 'noninteract')}
 
 
 class GroupRunwiseResults:
@@ -322,6 +329,18 @@ class GroupRunwiseResults:
         summary.to_csv(self.stats_file, index=False)
         return summary
 
+    def anova_analysis(self, mean_df):
+        conds = list(anova_factors.keys())
+        for (hemi, roi), roi_df in mean_df.groupby(['hemi', 'roi'], observed=True):
+            anova_df = roi_df[roi_df.trial_type.isin(conds)].copy()
+            anova_df['group'] = anova_df['trial_type'].map(lambda c: anova_factors[c][0])
+            anova_df['interact'] = anova_df['trial_type'].map(lambda c: anova_factors[c][1])
+            aov = pg.rm_anova(dv='response', within=['group', 'interact'],
+                               subject='subject_label', data=anova_df, detailed=True)
+            print(f'\n=== ANOVA: hemi-{hemi} roi-{roi} ===')
+            with pd.option_context('display.width', None, 'display.max_columns', None):
+                print(aov)
+
     def run(self):
         if self.overwrite or not os.path.exists(self.out_file):
             df = self.load_data()
@@ -333,6 +352,7 @@ class GroupRunwiseResults:
         mean_df['trial_type'] = mean_df['trial_type'].replace(condition_rename)
         mean_df.drop(columns='run', inplace=True)
         summary = self.statistical_analysis(mean_df)
+        self.anova_analysis(mean_df)
 
         mean_df['roi'] = pd.Categorical(mean_df['roi'],
                                             ordered=True,
