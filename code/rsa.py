@@ -15,35 +15,26 @@ from utils.mvpa import ROI_DEFINING_CONTRAST, roi_mask, condition_pattern
 # Condition order shared by the neural RDM and both model RDMs below
 CONDITIONS = ['interact', 'noninteract', 'com_ind', 'ind', 'face_first', 'face_noncom']
 
-# Cell markings transcribed directly from the hand-drawn 3P-interaction /
-# communication RDMs ("0" cells vs. "+" cells), condition order as above.
-_MARKED_CELLS = {
+# Model RDMs (0 = predicted similar, 1 = predicted dissimilar), condition order as above.
+# Values taken directly from the hand-drawn 3P-interaction / communication RDMs.
+MODEL_RDMS = {
     '3p_interaction': np.array([
-        [0, 0, 1, 0, 0, 0],
-        [0, 0, 0, 1, 1, 1],
-        [1, 0, 0, 0, 0, 0],
-        [0, 1, 0, 0, 1, 1],
-        [0, 1, 0, 1, 0, 1],
-        [0, 1, 0, 1, 1, 0],
+        [0, 1, 0, 1, 1, 1],
+        [1, 0, 1, 0, 0, 0],
+        [0, 1, 0, 1, 1, 1],
+        [1, 0, 1, 0, 0, 0],
+        [1, 0, 1, 0, 0, 0],
+        [1, 0, 1, 0, 0, 0],
     ]),
     'communication': np.array([
-        [0, 0, 1, 0, 1, 0],
-        [0, 0, 0, 1, 0, 1],
-        [1, 0, 0, 0, 1, 0],
-        [0, 1, 0, 0, 1, 1],
-        [1, 0, 1, 1, 0, 0],
-        [0, 1, 0, 1, 0, 0],
+        [0, 1, 0, 1, 0, 1],
+        [1, 0, 1, 0, 1, 0],
+        [0, 1, 0, 1, 0, 1],
+        [1, 0, 1, 0, 0, 0],
+        [0, 1, 0, 0, 0, 1],
+        [1, 0, 1, 0, 1, 0],
     ]),
 }
-
-# Model RDMs (0 = predicted similar, 1 = predicted dissimilar): the marked
-# cells above use the opposite convention, so invert off-diagonal entries
-# (the diagonal is always 0 - a condition is maximally similar to itself).
-MODEL_RDMS = {}
-for _name, _marked in _MARKED_CELLS.items():
-    _rdm = 1 - _marked
-    np.fill_diagonal(_rdm, 0)
-    MODEL_RDMS[_name] = _rdm
 
 # Condensed (pdist-ordered) form of each model RDM, for comparison against
 # condensed neural RDMs (both individual-level here and group-level in
