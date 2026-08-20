@@ -116,47 +116,67 @@ class GroupDecodingIndex:
         fig.savefig(os.path.join(self.out_path, 'decoding_index_summary.pdf'))
         plt.close(fig)
 
+    # (hemi_x, hemi_y) pairings: same-hemisphere first, then both
+    # cross-hemisphere directions (left corr_roi_x vs. right corr_roi_y and
+    # vice versa), since a confound shared across homotopic regions need not
+    # respect hemisphere boundaries.
+    HEMI_PAIRS = [('l', 'l'), ('r', 'r'), ('l', 'r'), ('r', 'l')]
+
     def compute_roi_correlation(self, long):
         """Across-subject Pearson correlation between the decoding index in
-        ``self.corr_roi_x`` and ``self.corr_roi_y``, computed separately per
-        hemisphere. A weak/non-significant correlation supports the argument
-        that a ``corr_roi_y`` effect (e.g. SI-STS) isn't inherited from a
-        low-level-confound-driven effect in ``corr_roi_x`` (e.g. EVC).
+        ``self.corr_roi_x`` and ``self.corr_roi_y``, computed for each
+        same- and cross-hemisphere pairing (HEMI_PAIRS). A weak/non-significant
+        correlation supports the argument that a ``corr_roi_y`` effect (e.g.
+        SI-STS) isn't inherited from a low-level-confound-driven effect in
+        ``corr_roi_x`` (e.g. EVC).
         """
-        wide = long.pivot_table(index=['subject', 'hemi'], columns='roi',
-                                 values='decoding_index').reset_index()
+        wide = long.pivot_table(index='subject', columns=['roi', 'hemi'], values='decoding_index')
+        wide.columns = [f'{roi}_{hemi}' for roi, hemi in wide.columns]
+        wide = wide.reset_index()
+
         rows = []
-        for hemi in self.hemis:
-            sub = wide.loc[wide['hemi'] == hemi, [self.corr_roi_x, self.corr_roi_y]].dropna()
-            if len(sub) < 3:
-                rows.append({'hemi': hemi, 'n': len(sub), 'r': np.nan, 'p': np.nan})
+        for hemi_x, hemi_y in self.HEMI_PAIRS:
+            x_col, y_col = f'{self.corr_roi_x}_{hemi_x}', f'{self.corr_roi_y}_{hemi_y}'
+            if x_col not in wide.columns or y_col not in wide.columns:
+                rows.append({'hemi_x': hemi_x, 'hemi_y': hemi_y, 'n': 0, 'r': np.nan, 'p': np.nan})
                 continue
-            r, p = pearsonr(sub[self.corr_roi_x], sub[self.corr_roi_y])
-            rows.append({'hemi': hemi, 'n': len(sub), 'r': r, 'p': p})
+            sub = wide[[x_col, y_col]].dropna()
+            if len(sub) < 3:
+                rows.append({'hemi_x': hemi_x, 'hemi_y': hemi_y, 'n': len(sub), 'r': np.nan, 'p': np.nan})
+                continue
+            r, p = pearsonr(sub[x_col], sub[y_col])
+            rows.append({'hemi_x': hemi_x, 'hemi_y': hemi_y, 'n': len(sub), 'r': r, 'p': p})
         corr = pd.DataFrame(rows)
         corr.to_csv(self.corr_file, index=False)
         return wide, corr
 
     def plot_roi_correlation(self, wide, corr):
         sns.set_context('talk', font_scale=0.8)
-        hemi_colors = {'l': '#4C72B0', 'r': '#DD8452'}
+        pair_colors = {('l', 'l'): '#4C72B0', ('r', 'r'): '#DD8452',
+                       ('l', 'r'): '#55A868', ('r', 'l'): '#8172B2'}
         hemi_names = {'l': 'left', 'r': 'right'}
-        fig, axes = plt.subplots(1, 2, figsize=(11, 5), sharex=True, sharey=True)
+        fig, axes = plt.subplots(2, 2, figsize=(11, 10), sharex=True, sharey=True)
 
-        for ax, hemi in zip(axes, self.hemis):
-            sub = wide.loc[wide['hemi'] == hemi, [self.corr_roi_x, self.corr_roi_y]].dropna()
-            row = corr.loc[corr['hemi'] == hemi].iloc[0]
-            sns.regplot(data=sub, x=self.corr_roi_x, y=self.corr_roi_y, ax=ax,
-                        color=hemi_colors[hemi], scatter_kws={'edgecolor': 'black', 's': 40})
+        for ax, (hemi_x, hemi_y) in zip(axes.flat, self.HEMI_PAIRS):
+            x_col, y_col = f'{self.corr_roi_x}_{hemi_x}', f'{self.corr_roi_y}_{hemi_y}'
+            row = corr.loc[(corr['hemi_x'] == hemi_x) & (corr['hemi_y'] == hemi_y)].iloc[0]
+            if x_col not in wide.columns or y_col not in wide.columns or pd.isna(row['r']):
+                ax.set_title(f'{hemi_names[hemi_x]} {self.corr_roi_x} vs. {hemi_names[hemi_y]} '
+                             f'{self.corr_roi_y}\n(insufficient data)')
+                continue
+            sub = wide[[x_col, y_col]].dropna()
+            sns.regplot(data=sub, x=x_col, y=y_col, ax=ax,
+                        color=pair_colors[(hemi_x, hemi_y)], scatter_kws={'edgecolor': 'black', 's': 40})
             ax.axhline(0, color='gray', linestyle='--', linewidth=1, zorder=0)
             ax.axvline(0, color='gray', linestyle='--', linewidth=1, zorder=0)
             star = p2star(row['p']) or 'n.s.'
-            ax.set_title(f"{hemi_names[hemi]} (n={int(row['n'])})\n"
-                         f"r={row['r']:.2f}, p={row['p']:.3f} {star}")
-            ax.set_xlabel(f'{self.corr_roi_x} decoding index')
-            ax.set_ylabel(f'{self.corr_roi_y} decoding index')
+            ax.set_title(f"{hemi_names[hemi_x]} {self.corr_roi_x} vs. {hemi_names[hemi_y]} {self.corr_roi_y} "
+                         f"(n={int(row['n'])})\nr={row['r']:.2f}, p={row['p']:.3f} {star}")
+            ax.set_xlabel(f'{hemi_names[hemi_x]} {self.corr_roi_x} decoding index')
+            ax.set_ylabel(f'{hemi_names[hemi_y]} {self.corr_roi_y} decoding index')
 
-        fig.suptitle(f'Across-subject correlation: {self.corr_roi_x} vs. {self.corr_roi_y} decoding index')
+        fig.suptitle(f'Across-subject correlation: {self.corr_roi_x} vs. {self.corr_roi_y} decoding index '
+                     '(same- and cross-hemisphere)')
         sns.despine(fig=fig)
         fig.tight_layout()
         fig.savefig(os.path.join(self.out_path, f'{self.corr_roi_x}_{self.corr_roi_y}_correlation.pdf'))
