@@ -12,16 +12,24 @@ from nilearn.plotting import plot_surf_stat_map
 from nilearn.surface import vol_to_surf
 from rsatoolbox.util.searchlight import get_volume_searchlight
 
+from decoding_index import CONDITIONS, FOLD_RUNS
 from utils.mri import load_brain_mask
 
-# Conditions used by the ROI-level decoding index (decoding_index.py); all
-# estimated in the 'communicate' task.
-CONDITIONS = ('com_ind', 'ind', 'face_first', 'face_noncom')
+
+def _cv_corr(patterns_a, patterns_b, idx, cond1, cond2):
+    """Cross-fold correlation between two conditions, averaged over both fold
+    directions (see decoding_index.py's DecodingIndex.cv_corr)."""
+    r1 = np.corrcoef(patterns_a[cond1][idx], patterns_b[cond2][idx])[0, 1]
+    r2 = np.corrcoef(patterns_b[cond1][idx], patterns_a[cond2][idx])[0, 1]
+    return 0.5 * (r1 + r2)
 
 
-def _decoding_index_sphere(neighbor_idx, mask_flat, patterns, min_voxels=2):
-    """Haxby-style within/between decoding index (see decoding_index.py) for
-    one searchlight sphere.
+def _decoding_index_sphere(neighbor_idx, mask_flat, patterns_a, patterns_b, min_voxels=2):
+    """Cross-validated Haxby-style within/between decoding index (see
+    decoding_index.py) for one searchlight sphere: ``patterns_a``/
+    ``patterns_b`` are whole-brain condition patterns averaged within fold A
+    (runs 1-5) / fold B (runs 6-9) respectively, and every term is computed
+    *across* folds to avoid the GLM design-collinearity bias described there.
 
     ``neighbor_idx`` are flat voxel indices for the full geometric sphere
     (rsatoolbox returns these without regard to the brain mask), so they are
@@ -38,26 +46,32 @@ def _decoding_index_sphere(neighbor_idx, mask_flat, patterns, min_voxels=2):
     if idx.size < min_voxels:
         return np.nan
 
-    com_ind, ind, face_first, face_noncom = (patterns[c][idx] for c in CONDITIONS)
-    r_w1 = np.corrcoef(com_ind, face_first)[0, 1]
-    r_w2 = np.corrcoef(ind, face_noncom)[0, 1]
-    r_b1 = np.corrcoef(com_ind, face_noncom)[0, 1]
-    r_b2 = np.corrcoef(face_first, ind)[0, 1]
+    r_w1 = _cv_corr(patterns_a, patterns_b, idx, 'com_ind', 'face_first')
+    r_w2 = _cv_corr(patterns_a, patterns_b, idx, 'ind', 'face_noncom')
+    r_b1 = _cv_corr(patterns_a, patterns_b, idx, 'com_ind', 'face_noncom')
+    r_b2 = _cv_corr(patterns_a, patterns_b, idx, 'face_first', 'ind')
     return 0.5 * (r_w1 + r_w2 - r_b1 - r_b2)
 
 
 class SearchlightDecodingIndex:
     """
-    Whole-brain searchlight version of the Haxby-style within/between
-    decoding index computed per-ROI in decoding_index.py: at every
-    searchlight sphere, tests whether communicative (com_ind, face_first)
-    and independent (ind, face_noncom) patterns are distinguishable in a way
-    that generalizes across agent count (dyad vs. single face).
+    Whole-brain searchlight version of the cross-validated Haxby-style
+    within/between decoding index computed per-ROI in decoding_index.py: at
+    every searchlight sphere, tests whether communicative (com_ind,
+    face_first) and independent (ind, face_noncom) patterns are
+    distinguishable in a way that generalizes across agent count (dyad vs.
+    single face).
+
+    As in decoding_index.py, each pairwise pattern correlation is computed
+    across two disjoint sets of runs (fold A = runs 1-5, fold B = runs 6-9;
+    NilearnGLMRunwise per-run betas) rather than from a single all-runs-pooled
+    GLM, which removes a GLM design-collinearity bias that otherwise inflates
+    same-fold pattern correlations independent of any true signal (see
+    methods.md).
 
     Searchlight neighborhoods and whole-brain nifti/surface output follow the
     same setup as video_sentence_analysis's searchlight_decoding.py
-    (rsatoolbox ``get_volume_searchlight``); the decoding-index formula
-    itself matches decoding_index.py exactly. rsatoolbox's searchlight radius
+    (rsatoolbox ``get_volume_searchlight``). rsatoolbox's searchlight radius
     is in voxel units, so ``--radius`` (given in mm) is converted using this
     subject's (anisotropic) voxel size before being passed in.
     """
@@ -67,7 +81,7 @@ class SearchlightDecodingIndex:
         self.dataset_path = args.dataset_path
         self.derivatives_path = os.path.join(self.dataset_path, 'derivatives')
         self.fmriprep_path = os.path.join(self.derivatives_path, 'fmriprep')
-        self.glm_path = os.path.join(self.derivatives_path, 'NilearnGLM')
+        self.runwise_glm_path = os.path.join(self.derivatives_path, 'NilearnGLMRunwise', f'sub-{args.subject}')
         self.subject = args.subject
         self.task_label = 'communicate'
         self.space_label = args.space_label
@@ -80,18 +94,25 @@ class SearchlightDecodingIndex:
         Path(self.out_path).mkdir(parents=True, exist_ok=True)
         print(vars(self))
 
-    def load_patterns(self, affine, shape):
-        patterns = {}
-        for condition in CONDITIONS:
-            beta_file = os.path.join(self.glm_path, f'sub-{self.subject}', f'task-{self.task_label}',
-                                      f'contrast-{condition}_stat-beta.nii.gz')
+    def load_fold_pattern(self, condition, fold, affine, shape):
+        """Average whole-brain per-run beta pattern across one fold's runs."""
+        run_arrays = []
+        for run in FOLD_RUNS[fold]:
+            beta_file = os.path.join(self.runwise_glm_path,
+                                     f'sub-{self.subject}_task-{self.task_label}_'
+                                     f'contrast-{condition}_run-{run}.nii.gz')
             if not os.path.exists(beta_file):
                 raise FileNotFoundError(f'Missing beta map: {beta_file}')
             img = nib.load(beta_file)
             if img.shape != shape or not np.allclose(img.affine, affine):
                 raise ValueError(f'{beta_file} does not match the brain mask geometry')
-            patterns[condition] = img.get_fdata().flatten()
-        return patterns
+            run_arrays.append(img.get_fdata().flatten())
+        return np.mean(run_arrays, axis=0)
+
+    def load_patterns(self, affine, shape):
+        patterns_a = {c: self.load_fold_pattern(c, 'A', affine, shape) for c in CONDITIONS}
+        patterns_b = {c: self.load_fold_pattern(c, 'B', affine, shape) for c in CONDITIONS}
+        return patterns_a, patterns_b
 
     def _save_img(self, arr, affine, outbase):
         nib.save(nib.Nifti1Image(arr, affine=affine), f'{outbase}.nii.gz')
@@ -122,7 +143,7 @@ class SearchlightDecodingIndex:
         mask_bool = mask_img.get_fdata().astype(bool)
         mask_flat = mask_bool.flatten()
 
-        patterns = self.load_patterns(affine, vol_shape)
+        patterns_a, patterns_b = self.load_patterns(affine, vol_shape)
 
         radius_voxels = self.radius_mm / np.mean(voxel_sizes(affine))
         print(f'[Searchlight] radius = {self.radius_mm} mm ~= {radius_voxels:.2f} voxels; '
@@ -132,7 +153,7 @@ class SearchlightDecodingIndex:
         print(f'[Searchlight] {len(centers)} centers.')
 
         results = Parallel(n_jobs=self.n_jobs)(
-            delayed(_decoding_index_sphere)(neighbor_idx, mask_flat, patterns)
+            delayed(_decoding_index_sphere)(neighbor_idx, mask_flat, patterns_a, patterns_b)
             for neighbor_idx in neighbors)
 
         n_vox = int(np.prod(vol_shape))
@@ -147,8 +168,8 @@ class SearchlightDecodingIndex:
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Whole-brain searchlight version of the Haxby-style decoding index '
-                    '(com_ind/ind/face_first/face_noncom), per subject.')
+        description='Whole-brain searchlight version of the cross-validated Haxby-style '
+                    'decoding index (com_ind/ind/face_first/face_noncom), per subject.')
     parser.add_argument('--dataset_path', '-d', type=str,
                         default='/orcd/data/ngk/001/users/emaliem/sts_communication')
     parser.add_argument('--subject', '-s', type=str, required=True, help='Subject ID (e.g., 01)')
