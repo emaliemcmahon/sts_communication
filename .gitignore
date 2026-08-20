@@ -19,6 +19,7 @@ notebooks/
 __pycache__/
 # Site-specific / non-shared pipeline pieces
 logs/
+makefile
 code/batch_*.sh
 code/dcm2bids.config
 code/rm_aborted_runs.py
