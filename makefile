@@ -111,6 +111,14 @@ voxel_overlap_communicate_pointlight:
 		sbatch $(project_path)/code/batch_voxel_overlap_communicate_pointlight.sh "$$s"; \
 	done
 
+# Whole-brain searchlight version of the decoding index (see
+# decoding_index.py for the ROI version). Submits one SLURM job per subject
+# (code/batch_searchlight_decoding_index.sh); no group-level aggregation yet.
+searchlight_decoding_index:
+	for s in $(subs); do \
+		sbatch $(project_path)/code/batch_searchlight_decoding_index.sh "$$s"; \
+	done
+
 # Aggregates BOTH voxel_overlap_communicate_pointlight and
 # voxel_overlap_pointlight_splithalf per-subject results: group Dice tables
 # for each, plus a combined summary plot with the split-half reliability
