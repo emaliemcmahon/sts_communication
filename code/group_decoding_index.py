@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
+from scipy.stats import pearsonr
 
 from utils.mvpa import ROI_DEFINING_CONTRAST
 from utils.stats import bootstrap_mean_ci, p2star
@@ -33,10 +34,13 @@ class GroupDecodingIndex:
         self.out_path = os.path.join(self.derivatives_path, self.process)
         self.out_file = os.path.join(self.out_path, 'subject_decoding_index.csv')
         self.stats_file = os.path.join(self.out_path, 'stats.csv')
+        self.corr_file = os.path.join(self.out_path, f'{args.corr_roi_x}_{args.corr_roi_y}_correlation.csv')
         self.sub_nums = args.sub_nums
         self.subjs = [str(i).zfill(2) for i in self.sub_nums]
         self.hemis = ['l', 'r']
         self.rois = list(ROI_DEFINING_CONTRAST.keys())
+        self.corr_roi_x = args.corr_roi_x
+        self.corr_roi_y = args.corr_roi_y
         print(vars(self))
         Path(self.out_path).mkdir(parents=True, exist_ok=True)
 
@@ -112,6 +116,52 @@ class GroupDecodingIndex:
         fig.savefig(os.path.join(self.out_path, 'decoding_index_summary.pdf'))
         plt.close(fig)
 
+    def compute_roi_correlation(self, long):
+        """Across-subject Pearson correlation between the decoding index in
+        ``self.corr_roi_x`` and ``self.corr_roi_y``, computed separately per
+        hemisphere. A weak/non-significant correlation supports the argument
+        that a ``corr_roi_y`` effect (e.g. SI-STS) isn't inherited from a
+        low-level-confound-driven effect in ``corr_roi_x`` (e.g. EVC).
+        """
+        wide = long.pivot_table(index=['subject', 'hemi'], columns='roi',
+                                 values='decoding_index').reset_index()
+        rows = []
+        for hemi in self.hemis:
+            sub = wide.loc[wide['hemi'] == hemi, [self.corr_roi_x, self.corr_roi_y]].dropna()
+            if len(sub) < 3:
+                rows.append({'hemi': hemi, 'n': len(sub), 'r': np.nan, 'p': np.nan})
+                continue
+            r, p = pearsonr(sub[self.corr_roi_x], sub[self.corr_roi_y])
+            rows.append({'hemi': hemi, 'n': len(sub), 'r': r, 'p': p})
+        corr = pd.DataFrame(rows)
+        corr.to_csv(self.corr_file, index=False)
+        return wide, corr
+
+    def plot_roi_correlation(self, wide, corr):
+        sns.set_context('talk', font_scale=0.8)
+        hemi_colors = {'l': '#4C72B0', 'r': '#DD8452'}
+        hemi_names = {'l': 'left', 'r': 'right'}
+        fig, axes = plt.subplots(1, 2, figsize=(11, 5), sharex=True, sharey=True)
+
+        for ax, hemi in zip(axes, self.hemis):
+            sub = wide.loc[wide['hemi'] == hemi, [self.corr_roi_x, self.corr_roi_y]].dropna()
+            row = corr.loc[corr['hemi'] == hemi].iloc[0]
+            sns.regplot(data=sub, x=self.corr_roi_x, y=self.corr_roi_y, ax=ax,
+                        color=hemi_colors[hemi], scatter_kws={'edgecolor': 'black', 's': 40})
+            ax.axhline(0, color='gray', linestyle='--', linewidth=1, zorder=0)
+            ax.axvline(0, color='gray', linestyle='--', linewidth=1, zorder=0)
+            star = p2star(row['p']) or 'n.s.'
+            ax.set_title(f"{hemi_names[hemi]} (n={int(row['n'])})\n"
+                         f"r={row['r']:.2f}, p={row['p']:.3f} {star}")
+            ax.set_xlabel(f'{self.corr_roi_x} decoding index')
+            ax.set_ylabel(f'{self.corr_roi_y} decoding index')
+
+        fig.suptitle(f'Across-subject correlation: {self.corr_roi_x} vs. {self.corr_roi_y} decoding index')
+        sns.despine(fig=fig)
+        fig.tight_layout()
+        fig.savefig(os.path.join(self.out_path, f'{self.corr_roi_x}_{self.corr_roi_y}_correlation.pdf'))
+        plt.close(fig)
+
     def run(self):
         if self.overwrite or not os.path.exists(self.out_file):
             long = self.load_data()
@@ -120,6 +170,9 @@ class GroupDecodingIndex:
 
         stats = self.compute_stats(long)
         self.plot_summary(stats)
+
+        wide, corr = self.compute_roi_correlation(long)
+        self.plot_roi_correlation(wide, corr)
 
 
 def main():
@@ -136,6 +189,12 @@ def main():
     parser.add_argument('--n_bootstrap', type=int, default=1000,
                          help='Subject bootstrap resamples for the CI.')
     parser.add_argument('--conf_level', type=float, default=0.95)
+    parser.add_argument('--corr_roi_x', type=str, default='EVC',
+                         help='ROI plotted on the x-axis of the across-subject '
+                              'decoding-index correlation scatter.')
+    parser.add_argument('--corr_roi_y', type=str, default='SI-STS',
+                         help='ROI plotted on the y-axis of the across-subject '
+                              'decoding-index correlation scatter.')
     args = parser.parse_args()
     GroupDecodingIndex(args).run()
 
