@@ -1,13 +1,12 @@
 import argparse
 import os
-from itertools import product
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-from utils.mvpa import ROI_DEFINING_CONTRAST, roi_mask, condition_pattern
+from utils.mvpa import ROI_DEFINING_CONTRAST, roi_masks_resolved, condition_pattern
 
 
 class DecodingIndex:
@@ -35,6 +34,7 @@ class DecodingIndex:
         self.out_path = os.path.join(self.derivatives_path, self.process, f'sub-{self.subject}')
         self.hemis = ['l', 'r']
         self.rois = list(ROI_DEFINING_CONTRAST.keys())
+        self.overlap_method = args.overlap_method
         Path(self.out_path).mkdir(parents=True, exist_ok=True)
 
     @staticmethod
@@ -43,32 +43,35 @@ class DecodingIndex:
 
     def run(self):
         rows = []
-        for roi, hemi in tqdm(list(product(self.rois, self.hemis)), desc=f'sub-{self.subject} decoding index'):
-            voxels = roi_mask(self.glm_path, self.parcel_path, self.subject, roi, hemi)
-            if voxels is None or voxels.sum() < 2:
-                continue
+        for hemi in tqdm(self.hemis, desc=f'sub-{self.subject} decoding index'):
+            hemi_masks = roi_masks_resolved(self.glm_path, self.parcel_path, self.subject, hemi,
+                                            rois=self.rois, method=self.overlap_method)
+            for roi in self.rois:
+                voxels = hemi_masks.get(roi)
+                if voxels is None or voxels.sum() < 2:
+                    continue
 
-            com_ind = condition_pattern(self.glm_path, self.subject, 'com_ind', voxels)
-            ind = condition_pattern(self.glm_path, self.subject, 'ind', voxels)
-            face_first = condition_pattern(self.glm_path, self.subject, 'face_first', voxels)
-            face_noncom = condition_pattern(self.glm_path, self.subject, 'face_noncom', voxels)
-            if any(pattern is None for pattern in (com_ind, ind, face_first, face_noncom)):
-                continue
+                com_ind = condition_pattern(self.glm_path, self.subject, 'com_ind', voxels)
+                ind = condition_pattern(self.glm_path, self.subject, 'ind', voxels)
+                face_first = condition_pattern(self.glm_path, self.subject, 'face_first', voxels)
+                face_noncom = condition_pattern(self.glm_path, self.subject, 'face_noncom', voxels)
+                if any(pattern is None for pattern in (com_ind, ind, face_first, face_noncom)):
+                    continue
 
-            r_w1 = self.pattern_corr(com_ind, face_first)
-            r_w2 = self.pattern_corr(ind, face_noncom)
-            r_b1 = self.pattern_corr(com_ind, face_noncom)
-            r_b2 = self.pattern_corr(face_first, ind)
-            decoding_index = 0.5 * (r_w1 + r_w2 - r_b1 - r_b2)
+                r_w1 = self.pattern_corr(com_ind, face_first)
+                r_w2 = self.pattern_corr(ind, face_noncom)
+                r_b1 = self.pattern_corr(com_ind, face_noncom)
+                r_b2 = self.pattern_corr(face_first, ind)
+                decoding_index = 0.5 * (r_w1 + r_w2 - r_b1 - r_b2)
 
-            rows.append({
-                'subject': self.subject, 'roi': roi, 'hemi': hemi, 'n_voxels': int(voxels.sum()),
-                'r_w1_com_ind_face_first': r_w1,
-                'r_w2_ind_face_noncom': r_w2,
-                'r_b1_com_ind_face_noncom': r_b1,
-                'r_b2_face_first_ind': r_b2,
-                'decoding_index': decoding_index,
-            })
+                rows.append({
+                    'subject': self.subject, 'roi': roi, 'hemi': hemi, 'n_voxels': int(voxels.sum()),
+                    'r_w1_com_ind_face_first': r_w1,
+                    'r_w2_ind_face_noncom': r_w2,
+                    'r_b1_com_ind_face_noncom': r_b1,
+                    'r_b2_face_first_ind': r_b2,
+                    'decoding_index': decoding_index,
+                })
 
         df = pd.DataFrame(rows)
         out_file = os.path.join(self.out_path, f'sub-{self.subject}_decoding_index.csv')
@@ -85,7 +88,13 @@ def main():
                          default='/orcd/data/ngk/001/users/emaliem/sts_communication')
     parser.add_argument('--subject', '-s', type=str, required=True, help='Subject ID (e.g., 01)')
     parser.add_argument('--space_label', '-sp', type=str, default='MNI152NLin2009cAsym')
+    parser.add_argument('--overlap_method', type=str, choices=['winner_take_all', 'drop', 'none'],
+                         default='winner_take_all',
+                         help='How to resolve voxels independently selected by more than one '
+                              "ROI's mask (see utils.mvpa.roi_masks_resolved). 'none' disables "
+                              'resolution.')
     args = parser.parse_args()
+    args.overlap_method = None if args.overlap_method == 'none' else args.overlap_method
     DecodingIndex(args).run()
 
 

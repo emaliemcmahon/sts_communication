@@ -1,7 +1,8 @@
 import os
 import nibabel as nib
+import numpy as np
 
-from utils.mri import roi_size, roi_switcher, selective_mask_img
+from utils.mri import roi_size, roi_switcher, selective_mask_img, winner_take_all
 
 
 # (task, contrast_name) used to define each functional ROI, matching the
@@ -52,6 +53,51 @@ def roi_mask(glm_path, parcel_path, subject, roi, hemi):
     mask = selective_mask_img(mask_file, contrast_file, keep_prop=roi_size[roi],
                                return_nifti=False)
     return mask.astype(bool).flatten()
+
+
+def roi_masks_resolved(glm_path, parcel_path, subject, hemi, rois=None, method='winner_take_all'):
+    """
+    Boolean voxel masks (flattened) for multiple ROIs in one hemisphere, with
+    voxels independently selected by more than one ROI's roi_mask() resolved
+    via `method`, following video_sentence_analysis's
+    first_level_univariate/build_froi_masks.py:
+      - 'winner_take_all' (default): each contested voxel is kept only for
+        whichever competing ROI has the higher t-stat in its own defining
+        contrast (ROI_DEFINING_CONTRAST) at that voxel.
+      - 'drop': contested voxels are removed from every claiming ROI.
+      - None: no resolution (equivalent to calling roi_mask() per ROI).
+
+    ROIs missing their contrast/parcel file are silently dropped (matching
+    roi_mask's None-return behavior).
+
+    Returns
+    -------
+    dict[str, np.ndarray] mapping roi -> flattened boolean mask, only for
+    ROIs whose files were found.
+    """
+    if rois is None:
+        rois = list(ROI_DEFINING_CONTRAST.keys())
+
+    masks, stats = {}, {}
+    for roi in rois:
+        mask = roi_mask(glm_path, parcel_path, subject, roi, hemi)
+        if mask is None:
+            continue
+        task, contrast_name = ROI_DEFINING_CONTRAST[roi]
+        contrast_file = os.path.join(glm_path, f'sub-{subject}', f'task-{task}',
+                                      f'contrast-{contrast_name}_stat-tmap.nii.gz')
+        masks[roi] = mask
+        stats[roi] = nib.load(contrast_file).get_fdata().flatten()
+
+    if not masks or method is None:
+        return masks
+    if method == 'drop':
+        mask_stack = np.stack(list(masks.values()), axis=0)
+        contested = mask_stack.sum(axis=0) > 1
+        return {roi: m & ~contested for roi, m in masks.items()}
+    if method == 'winner_take_all':
+        return winner_take_all(masks, stats)
+    raise ValueError(f'Unknown overlap resolution method: {method}')
 
 
 def condition_pattern(glm_path, subject, condition, voxels):

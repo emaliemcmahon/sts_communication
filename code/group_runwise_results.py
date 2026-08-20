@@ -48,7 +48,8 @@ class GroupRunwiseResults:
         self.plot_joint_ind_bar = args.plot_joint_ind_bar
         self.derivatives_path = f'{self.dataset_path}/derivatives'
         self.individual_path = f'{self.derivatives_path}/RunwiseResponse'
-        self.out_path = f'{self.derivatives_path}/{self.process}'
+        out_dir = f'{self.process}_{args.out_tag}' if args.out_tag else self.process
+        self.out_path = f'{self.derivatives_path}/{out_dir}'
         self.out_file = f'{self.out_path}/summary.csv'
         self.stats_file = f'{self.out_path}/stats.csv'
         self.sub_nums = args.sub_nums
@@ -374,6 +375,10 @@ def main():
                         help='Include object and body conditions in individual ROI plots')
     parser.add_argument('--plot_joint_ind_bar', action=argparse.BooleanOptionalAction, default=True,
                         help='Plot the dyads not interacting vs. dyads interacting not talking significance bar')
+    parser.add_argument('--out_tag', type=str, default='',
+                        help='If set, write to derivatives/GroupRunwiseResults_<out_tag>/ instead of '
+                             'derivatives/GroupRunwiseResults/, so a run on a subject subset does not '
+                             'overwrite the full-sample results.')
     args = parser.parse_args()
     GroupRunwiseResults(args).run()
 

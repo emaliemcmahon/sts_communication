@@ -224,6 +224,42 @@ def parse_contrast(model, c1, c2):
     return contrast
 
 
+def winner_take_all(masks, stats):
+    """Resolve voxels claimed by more than one boolean mask.
+
+    Each voxel claimed by more than one entry of ``masks`` is kept only for
+    the entry with the highest value in the corresponding ``stats`` array at
+    that voxel (Fedorenko et al., 2010-style GSS overlap resolution, as in
+    video_sentence_analysis/first_level_univariate/build_froi_masks.py).
+    Voxels claimed by zero or one entry are unaffected. Arrays must share the
+    same shape (this works on flattened 1D masks or full 3D volumes alike).
+
+    Note: if two competing entries share the same defining contrast (e.g.
+    EVC/MT or FFA/fSTS in ROI_DEFINING_CONTRAST), their stat maps are
+    identical at every voxel, so ties are broken by dict/array order rather
+    than by any real selectivity difference.
+
+    Parameters
+    ----------
+    masks : dict[str, np.ndarray of bool]
+    stats : dict[str, np.ndarray of float]
+        Same keys and shapes as ``masks``.
+
+    Returns
+    -------
+    dict[str, np.ndarray of bool]
+    """
+    keys = list(masks.keys())
+    mask_stack = np.stack([masks[k] for k in keys], axis=0)
+    stat_stack = np.stack([stats[k] for k in keys], axis=0)
+    masked_stats = np.where(mask_stack, stat_stack, -np.inf)
+    winner_idx = np.argmax(masked_stats, axis=0)
+    idx_shape = (len(keys),) + (1,) * (mask_stack.ndim - 1)
+    roi_idx_grid = np.arange(len(keys)).reshape(idx_shape)
+    resolved = mask_stack & (roi_idx_grid == winner_idx[np.newaxis, ...])
+    return {k: resolved[i] for i, k in enumerate(keys)}
+
+
 def selective_mask_img(mask_file, img_file, keep_prop=0.1, debug_output=None, return_nifti=True):
     """
     Create a new mask by selecting top positive voxels within a parcel.

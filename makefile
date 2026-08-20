@@ -4,6 +4,22 @@ subs := 01 02 03 04 05 07 08 09 11 12 13 14 15 16 18 19 20 21 22 23
 tom_subs := 01 03 04 05 07 08 09 11 12 13 14 15 16 18 19 22 23
 GROUP_RUNWISE_FLAGS ?=
 
+# generate_block.py (../communication_exp/sts_communication_experiment/), which
+# determines each subject's block order AND which specific video exemplars they
+# see, seeds numpy with `int(time.time())` -- one-second resolution. Subjects
+# whose run files were generated within the same second got byte-identical
+# sessions (same block order, same exemplar videos, same within-block shuffle,
+# same 1-back repeat trial) instead of the independent-per-participant
+# randomization the preregistration specifies. Diffing the source run files
+# (not just the BIDS events.tsv, which can diverge on a couple of runs) found
+# these exact-duplicate groups -- likely subjects whose files were generated
+# back-to-back in the same batch:
+#   01+02, 03+04, 05+07, 08+09, 11+12, 13+14+15, 16+18+19, 20+21+22   (23 unique)
+# So the nominal n=20 sample is really only ~9 independent stimulus draws;
+# treating all 20 as exchangeable overstates independence for group stats.
+# independent_subs keeps only the first subject from each duplicate group.
+independent_subs := 01 03 05 08 11 13 16 20 23
+
 # Full pipeline (run stages in order)
 all: preprocess first_level_runwise runwise_response group_runwise first_level_models random_effects
 
@@ -14,7 +30,17 @@ preprocess:
 		bash $(project_path)/code/run_fmriprep.sh "$$s"; \
 	done
 
-# Cross-validated, run-wise first-level GLMs (defines fROIs)
+# Cross-validated, run-wise first-level GLMs (defines fROIs). Within the
+# communicate task, EVC/MT/FFA/EBA/fSTS are all defined in the same fold, so
+# voxels top-N%-selected by more than one of those ROIs' parcels are resolved
+# via winner-take-all (nilearn_glm_runwise.py --overlap_method, default
+# winner_take_all): the contested voxel goes to whichever ROI has the higher
+# z-stat in its own defining contrast there, matching video_sentence_analysis's
+# build_froi_masks.py. This does NOT arbitrate across tasks (e.g. SI-STS vs.
+# fSTS) since pointlight/tom/communicate use different LOO fold structures --
+# doing so would leak a held-out run's data into another task's fold-specific
+# ROI definition. Pass --overlap_method none to restore the old behavior
+# (each ROI's raw top-N% selection, independent of what other ROIs claim).
 first_level_runwise:
 	for s in $(subs); do \
 		python $(project_path)/code/nilearn_glm_runwise.py -s "$$s" -t pointlight; \
@@ -33,6 +59,13 @@ runwise_response:
 # Group ROI summaries, paired t-tests, and plots
 group_runwise:
 	python $(project_path)/code/group_runwise_results.py $(subs) $(GROUP_RUNWISE_FLAGS)
+
+# Same as group_runwise, but restricted to independent_subs (see comment above)
+# to check whether results hold with the stimulus-duplication confound removed.
+# Writes to derivatives/GroupRunwiseResults_independent/ so it does not
+# overwrite the full-sample group_runwise output.
+group_runwise_independent:
+	python $(project_path)/code/group_runwise_results.py $(independent_subs) --out_tag independent $(GROUP_RUNWISE_FLAGS)
 
 # Whole-brain first-level GLMs (one t-map per contrast, plus one condition-vs-
 # baseline beta map per condition, per subject). Submits one SLURM job per

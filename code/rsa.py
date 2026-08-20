@@ -1,6 +1,5 @@
 import argparse
 import os
-from itertools import product
 from pathlib import Path
 
 import numpy as np
@@ -9,7 +8,7 @@ from scipy.spatial.distance import pdist, squareform
 from scipy.stats import spearmanr
 from tqdm import tqdm
 
-from utils.mvpa import ROI_DEFINING_CONTRAST, roi_mask, condition_pattern
+from utils.mvpa import ROI_DEFINING_CONTRAST, roi_masks_resolved, condition_pattern
 
 
 # Condition order shared by the neural RDM and both model RDMs below. Restricted
@@ -67,6 +66,7 @@ class RSA:
         self.out_path = os.path.join(self.derivatives_path, self.process, f'sub-{self.subject}')
         self.hemis = ['l', 'r']
         self.rois = list(ROI_DEFINING_CONTRAST.keys())
+        self.overlap_method = args.overlap_method
         Path(self.out_path).mkdir(parents=True, exist_ok=True)
 
     def neural_rdm(self, patterns):
@@ -84,23 +84,26 @@ class RSA:
 
     def run(self):
         rows = []
-        for roi, hemi in tqdm(list(product(self.rois, self.hemis)), desc=f'sub-{self.subject} RSA'):
-            voxels = roi_mask(self.glm_path, self.parcel_path, self.subject, roi, hemi)
-            if voxels is None or voxels.sum() < 2:
-                continue
+        for hemi in tqdm(self.hemis, desc=f'sub-{self.subject} RSA'):
+            hemi_masks = roi_masks_resolved(self.glm_path, self.parcel_path, self.subject, hemi,
+                                            rois=self.rois, method=self.overlap_method)
+            for roi in self.rois:
+                voxels = hemi_masks.get(roi)
+                if voxels is None or voxels.sum() < 2:
+                    continue
 
-            patterns = [condition_pattern(self.glm_path, self.subject, condition, voxels)
-                        for condition in CONDITIONS]
-            if any(pattern is None for pattern in patterns):
-                continue
+                patterns = [condition_pattern(self.glm_path, self.subject, condition, voxels)
+                            for condition in CONDITIONS]
+                if any(pattern is None for pattern in patterns):
+                    continue
 
-            rdm = self.neural_rdm(patterns)
-            np.save(os.path.join(self.out_path,
-                                  f'sub-{self.subject}_hemi-{hemi}_roi-{roi}_neural_rdm.npy'), rdm)
+                rdm = self.neural_rdm(patterns)
+                np.save(os.path.join(self.out_path,
+                                      f'sub-{self.subject}_hemi-{hemi}_roi-{roi}_neural_rdm.npy'), rdm)
 
-            row = {'subject': self.subject, 'roi': roi, 'hemi': hemi, 'n_voxels': int(voxels.sum())}
-            row.update(self.compare_to_models(rdm))
-            rows.append(row)
+                row = {'subject': self.subject, 'roi': roi, 'hemi': hemi, 'n_voxels': int(voxels.sum())}
+                row.update(self.compare_to_models(rdm))
+                rows.append(row)
 
         df = pd.DataFrame(rows)
         out_file = os.path.join(self.out_path, f'sub-{self.subject}_rsa.csv')
@@ -117,7 +120,13 @@ def main():
                          default='/orcd/data/ngk/001/users/emaliem/sts_communication')
     parser.add_argument('--subject', '-s', type=str, required=True, help='Subject ID (e.g., 01)')
     parser.add_argument('--space_label', '-sp', type=str, default='MNI152NLin2009cAsym')
+    parser.add_argument('--overlap_method', type=str, choices=['winner_take_all', 'drop', 'none'],
+                         default='winner_take_all',
+                         help='How to resolve voxels independently selected by more than one '
+                              "ROI's mask (see utils.mvpa.roi_masks_resolved). 'none' disables "
+                              'resolution.')
     args = parser.parse_args()
+    args.overlap_method = None if args.overlap_method == 'none' else args.overlap_method
     RSA(args).run()
 
 
