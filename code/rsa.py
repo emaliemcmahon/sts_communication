@@ -12,27 +12,28 @@ from tqdm import tqdm
 from utils.mvpa import ROI_DEFINING_CONTRAST, roi_mask, condition_pattern
 
 
-# Condition order shared by the neural RDM and both model RDMs below
-CONDITIONS = ['interact', 'noninteract', 'com_ind', 'ind', 'face_first', 'face_noncom']
+# Condition order shared by the neural RDM and both model RDMs below. Restricted
+# to the communicate task (no pointlight interact/noninteract).
+CONDITIONS = ['com_ind', 'ind', 'face_first', 'face_noncom']
 
 # Model RDMs (0 = predicted similar, 1 = predicted dissimilar), condition order as above.
-# Values taken directly from the hand-drawn 3P-interaction / communication RDMs.
+# 3p_interaction is the submatrix of the original hand-drawn 6-condition RDM
+# restricted to these four conditions. communication is a clean two-category
+# split (communicative: com_ind, face_first; independent: ind, face_noncom) -
+# the submatrix of the hand-drawn RDM had one cell (ind-face_first) drawn as
+# similar despite crossing that category boundary; it's set to dissimilar here.
 MODEL_RDMS = {
     '3p_interaction': np.array([
-        [0, 1, 0, 1, 1, 1],
-        [1, 0, 1, 0, 0, 0],
-        [0, 1, 0, 1, 1, 1],
-        [1, 0, 1, 0, 0, 0],
-        [1, 0, 1, 0, 0, 0],
-        [1, 0, 1, 0, 0, 0],
+        [0, 1, 1, 1],
+        [1, 0, 0, 0],
+        [1, 0, 0, 0],
+        [1, 0, 0, 0],
     ]),
     'communication': np.array([
-        [0, 1, 0, 1, 0, 1],
-        [1, 0, 1, 0, 1, 0],
-        [0, 1, 0, 1, 0, 1],
-        [1, 0, 1, 0, 0, 0],
-        [0, 1, 0, 0, 0, 1],
-        [1, 0, 1, 0, 1, 0],
+        [0, 1, 0, 1],
+        [1, 0, 1, 0],
+        [0, 1, 0, 1],
+        [1, 0, 1, 0],
     ]),
 }
 
@@ -46,8 +47,8 @@ class RSA:
     """
     Representational similarity analysis comparing two model RDMs (3P
     interaction vs. communication) against the neural RDM in each functional
-    ROI, for six conditions spanning the pointlight and communicate tasks:
-    interact, noninteract, com_ind, ind, face_first, face_noncom.
+    ROI, for four communicate-task conditions: com_ind, ind, face_first,
+    face_noncom.
 
     The neural RDM is a condensed correlation-distance vector (1 - Pearson
     correlation) between condition beta patterns (each vs. fixation),
