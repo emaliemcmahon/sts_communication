@@ -23,11 +23,12 @@ independent_subs := 01 03 05 08 11 13 16 20 23
 # Full pipeline (run stages in order)
 all: preprocess first_level_runwise runwise_response group_runwise first_level_models random_effects
 
-# Preprocess fMRI data with fMRIPrep 24.1.1 (see code/run_fmriprep.sh for the
-# exact singularity call). Wrap this in your local scheduler as appropriate.
+# Preprocess fMRI data with fMRIPrep 24.1.1. Submits one SLURM job per
+# subject (code/batch_preproc.sh); see code/run_fmriprep.sh for the
+# unwrapped singularity call it mirrors.
 preprocess:
 	for s in $(subs); do \
-		bash $(project_path)/code/run_fmriprep.sh "$$s"; \
+		sbatch $(project_path)/code/batch_preproc.sh "$$s"; \
 	done
 
 # Cross-validated, run-wise first-level GLMs (defines fROIs). Within the
@@ -41,31 +42,34 @@ preprocess:
 # doing so would leak a held-out run's data into another task's fold-specific
 # ROI definition. Pass --overlap_method none to restore the old behavior
 # (each ROI's raw top-N% selection, independent of what other ROIs claim).
+# Submits one SLURM job per subject/task (code/batch_runwise_glm.sh).
 first_level_runwise:
 	for s in $(subs); do \
-		python $(project_path)/code/nilearn_glm_runwise.py -s "$$s" -t pointlight; \
-		python $(project_path)/code/nilearn_glm_runwise.py -s "$$s" -t communicate; \
+		sbatch $(project_path)/code/batch_runwise_glm.sh "$$s" pointlight; \
+		sbatch $(project_path)/code/batch_runwise_glm.sh "$$s" communicate; \
 	done
 	for s in $(tom_subs); do \
-		python $(project_path)/code/nilearn_glm_runwise.py -s "$$s" -t tom; \
+		sbatch $(project_path)/code/batch_runwise_glm.sh "$$s" tom; \
 	done
 
-# Extract cross-validated ROI beta responses per subject
+# Extract cross-validated ROI beta responses per subject. Submits one SLURM
+# job per subject (code/batch_subject_runwise_response.sh).
 runwise_response:
 	for s in $(subs); do \
-		python $(project_path)/code/runwise_response.py -s "$$s"; \
+		sbatch $(project_path)/code/batch_subject_runwise_response.sh "$$s"; \
 	done
 
-# Group ROI summaries, paired t-tests, and plots
+# Group ROI summaries, paired t-tests, and plots. Submitted via SLURM
+# (code/batch_group_runwise.sh), which always runs with --overwrite.
 group_runwise:
-	python $(project_path)/code/group_runwise_results.py $(subs) $(GROUP_RUNWISE_FLAGS)
+	sbatch $(project_path)/code/batch_group_runwise.sh $(subs) $(GROUP_RUNWISE_FLAGS)
 
 # Same as group_runwise, but restricted to independent_subs (see comment above)
 # to check whether results hold with the stimulus-duplication confound removed.
 # Writes to derivatives/GroupRunwiseResults_independent/ so it does not
 # overwrite the full-sample group_runwise output.
 group_runwise_independent:
-	python $(project_path)/code/group_runwise_results.py $(independent_subs) --out_tag independent $(GROUP_RUNWISE_FLAGS)
+	sbatch $(project_path)/code/batch_group_runwise.sh $(independent_subs) --out_tag independent $(GROUP_RUNWISE_FLAGS)
 
 # Whole-brain first-level GLMs (one t-map per contrast, plus one condition-vs-
 # baseline beta map per condition, per subject). Submits one SLURM job per
@@ -98,16 +102,16 @@ communicate communicate communicate communicate \
 communicate communicate communicate
 
 # Whole-brain second-level (TFCE + FWER via non-parametric inference) and
-# associated surface plots for each contrast.
+# associated surface plots for each contrast. Submits one SLURM job per
+# contrast (code/batch_random_effects.sh), which runs both steps in sequence.
 random_effects:
-	@echo "Running random-effects analyses..."
+	@echo "Submitting random-effects analyses..."
 	$(eval LENGTH := $(words $(C1S)))
 	$(foreach i, $(shell seq 1 $(LENGTH)), \
 		$(eval C1 := $(word $(i),$(C1S))) \
 		$(eval C2 := $(word $(i),$(C2S))) \
 		$(eval TASK := $(word $(i),$(TASKS))) \
-		python $(project_path)/code/group_random_effects.py -c1 $(C1) -c2 $(C2) -t $(TASK); \
-		python $(project_path)/code/plot_surfaces.py       -c1 $(C1) -c2 $(C2) -t $(TASK); \
+		sbatch $(project_path)/code/batch_random_effects.sh $(C1) $(C2) $(TASK); \
 		echo $(C1) $(C2) $(TASK); \
 	)
 
