@@ -2,14 +2,12 @@ import argparse
 import os
 import warnings
 from tqdm import tqdm
-from glob import glob
 from pathlib import Path
 import numpy as np
 from nilearn.glm.first_level import first_level_from_bids as flfb
 from nilearn.glm import threshold_stats_img
 import nibabel as nib
-from utils.mri import parse_contrast, info2vars
-from nilearn.masking import intersect_masks
+from utils.mri import parse_contrast, info2vars, load_brain_mask
 
 
 contrasts = {'communicate': [
@@ -54,10 +52,7 @@ class NilearnGLM:
         nib.save(mask_img, f'{self.out_path}/sub-{self.subj}/task-{self.task_label}/contrast-{contrast_name}_mask.nii.gz')
 
     def load_mask(self):
-        mask_files = sorted(glob(f'{self.fmriprep_path}/sub-{self.subj}/ses-01/func/*task-{self.task_label}*{self.space_label}*brain_mask.nii.gz'))
-        print(mask_files)
-        masks = [nib.load(mask_file) for mask_file in mask_files]
-        return intersect_masks(masks)
+        return load_brain_mask(self.fmriprep_path, self.subj, self.task_label, self.space_label)
 
     def run_glm(self):
         mask = self.load_mask()

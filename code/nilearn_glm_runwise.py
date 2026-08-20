@@ -1,13 +1,11 @@
 import os
 import argparse
-from glob import glob
 from pathlib import Path
 from nilearn.glm.first_level import first_level_from_bids as flfb
 import nibabel as nib
 from tqdm import tqdm
-from nilearn.masking import intersect_masks
 from itertools import product
-from utils.mri import info2vars, selective_mask_img, parse_contrast, roi_size, roi_switcher
+from utils.mri import info2vars, selective_mask_img, parse_contrast, roi_size, roi_switcher, load_brain_mask
 import warnings
 
 # Suppress the specific warning about unexpected columns in events data
@@ -52,10 +50,7 @@ class NilearnGLMRunwise:
         print(vars(self))
 
     def load_mask(self):
-        mask_files = sorted(glob(f'{self.fmriprep_path}/sub-{self.subject_label}/ses-01/func/*task-{self.task_label}*{self.space_label}*brain_mask.nii.gz'))
-        # print(mask_files)
-        masks = [nib.load(mask_file) for mask_file in mask_files]
-        return intersect_masks(masks)
+        return load_brain_mask(self.fmriprep_path, self.subject_label, self.task_label, self.space_label)
 
     def glm(self):
         mask = self.load_mask()

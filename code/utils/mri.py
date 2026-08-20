@@ -1,6 +1,9 @@
+from glob import glob
+
 from nilearn.datasets import load_fsaverage, load_fsaverage_data
 from nilearn.surface import SurfaceImage, vol_to_surf
 import numpy as np
+from nilearn.masking import intersect_masks
 from nilearn.plotting import plot_glass_brain
 import matplotlib.pyplot as plt
 import nibabel as nib
@@ -20,6 +23,21 @@ def roi_switcher(roi):
     else:
         return roi
     
+
+def load_brain_mask(fmriprep_path, subject, task_label, space_label):
+    """
+    Whole-brain analysis mask for one subject/task: the intersection of
+    each run's fmriprep brain mask, matching the mask nilearn_glm.py and
+    nilearn_glm_runwise.py fit their GLM with (not saved separately to disk).
+    """
+    mask_files = sorted(glob(f'{fmriprep_path}/sub-{subject}/ses-01/func/'
+                              f'*task-{task_label}*{space_label}*brain_mask.nii.gz'))
+    if not mask_files:
+        raise FileNotFoundError(f'No brain masks found for sub-{subject} task-{task_label} '
+                                 f'space-{space_label}')
+    masks = [nib.load(mask_file) for mask_file in mask_files]
+    return intersect_masks(masks)
+
 
 def info2vars(model_info):
     (models, imgs, events, confounds) = model_info
