@@ -37,9 +37,9 @@ class VoxelOverlapPointlightSplitHalf:
     computed independently per hemisphere.
 
     This script processes one subject at a time; run it once per subject
-    (see batch_voxel_overlap_pointlight_splithalf.sh / `make voxel_overlap_pointlight_splithalf`)
-    and then run voxel_overlap_pointlight_splithalf_group.py to aggregate results
-    across subjects.
+    (see batch_voxel_overlap_pointlight_splithalf.sh / `make voxel_overlap_pointlight_splithalf`).
+    Group aggregation happens together with voxel_overlap.py's per-subject output
+    in voxel_overlap_group.py, which uses this split-half Dice as a noise ceiling.
     """
 
     def __init__(self, args):

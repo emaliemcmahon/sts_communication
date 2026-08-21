@@ -7,6 +7,7 @@ import nibabel as nib
 import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
+from tqdm import tqdm
 
 from utils.mri import vol2surf
 from nilearn.plotting import plot_surf_stat_map, plot_glass_brain
@@ -25,8 +26,10 @@ class PlotSurfaces:
         self.logp = -1*np.log10(self.alpha)  # Threshold for p < 0.05 in -log10 space
         self.threshold = None
         self.data_top_dir = os.path.join(self.dataset_path, 'derivatives')
-        self.random_effects_dir = os.path.join(self.data_top_dir, 'GroupRandomEffects')
-        self.outpath = os.path.join(self.data_top_dir, 'SurfacePlots')
+        random_effects_dir = f'GroupRandomEffects_{args.out_tag}' if args.out_tag else 'GroupRandomEffects'
+        out_dir = f'SurfacePlots_{args.out_tag}' if args.out_tag else 'SurfacePlots'
+        self.random_effects_dir = os.path.join(self.data_top_dir, random_effects_dir)
+        self.outpath = os.path.join(self.data_top_dir, out_dir)
         Path(self.outpath).mkdir(exist_ok=True, parents=True)
 
     def load_stat_img(self):
@@ -57,15 +60,17 @@ class PlotSurfaces:
                     dpi=300, bbox_inches='tight')
         plt.close()
 
-    def plot_surfs(self, img, fsaverage_meshes, fsaverage_sulcal):
-        for hemi, view in product(['left', 'right'], ['lateral', 'ventral']):
+    def plot_surfs(self, img, fsaverage_meshes, fsaverage_sulcal, vmin, vmax):
+        items = list(product(['left', 'right'], ['lateral', 'ventral']))
+        for hemi, view in tqdm(items, desc='Plotting surfaces', unit='plot'):
             fig = plot_surf_stat_map(
                 stat_map=img,
                 surf_mesh=fsaverage_meshes["inflated"],
                 hemi=hemi,
                 view=view,
                 threshold=self.threshold,
-                vmin=self.threshold,
+                vmin=vmin,
+                vmax=vmax,
                 bg_map=fsaverage_sulcal,
                 darkness=None,
                 cmap=self.palette
@@ -73,7 +78,7 @@ class PlotSurfaces:
 
             # Add colorbar label
             cbar = fig.axes[-1]  # Get the colorbar axis
-            cbar.set_ylabel('t-value', rotation=270, labelpad=30, fontsize=22, fontweight='bold',
+            cbar.set_ylabel('t-value', rotation=270, labelpad=10, fontsize=22,
                             va='bottom')
             cbar.yaxis.label.set_rotation(270)
 
@@ -81,11 +86,9 @@ class PlotSurfaces:
             pos = cbar.get_position()
             cbar.set_position([pos.x0, pos.y0 + pos.height * 0.2, pos.width, pos.height * 0.8])
 
-            # Set ticks to be equally distributed based on the actual data range
-            surf_values = np.concatenate([np.asarray(v).ravel() for v in img.data.parts.values()])
-            vmax = float(np.nanmax(np.abs(surf_values)))
-            vmin = self.threshold if self.threshold is not None else float(np.nanmin(surf_values))
+            # Set ticks to be equally distributed across the shared vmin/vmax range
             ticks = np.linspace(vmin, vmax, 5)
+            cbar.set_ylim(vmin, vmax)
             cbar.set_yticks(ticks)
             cbar.set_yticklabels([f'{t:.1f}' for t in ticks])
 
@@ -105,8 +108,12 @@ class PlotSurfaces:
     def plot(self):
         stat_img, p_img = self.load_stat_img()
         self.plot_stat_map(stat_img)
+        # Use vmin/vmax from the volume so left and right hemi colorbars match
+        vol_data = stat_img.get_fdata()
+        vmax = 0.9 * float(np.nanmax(vol_data))
+        vmin = self.threshold if self.threshold is not None else float(np.nanmin(vol_data))
         img, fsaverage_meshes, fsaverage_sulcal = vol2surf(stat_img)
-        self.plot_surfs(img, fsaverage_meshes, fsaverage_sulcal)
+        self.plot_surfs(img, fsaverage_meshes, fsaverage_sulcal, vmin, vmax)
 
 
 def main():
@@ -121,6 +128,9 @@ def main():
                          help='Seaborn color palette name')
     parser.add_argument('--task', '-t', type=str, default='communicate',
                          help='Task label for the analysis')
+    parser.add_argument('--out_tag', type=str, default='',
+                         help='If set, read from derivatives/GroupRandomEffects_<out_tag>/ and write to '
+                              'derivatives/SurfacePlots_<out_tag>/ instead of the unsuffixed directories.')
     args = parser.parse_args()
     PlotSurfaces(args).plot()
 

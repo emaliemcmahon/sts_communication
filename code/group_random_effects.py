@@ -15,7 +15,8 @@ import time
 
 class GroupRandomEffects:
     def __init__(self, args):
-        self.process = 'GroupRandomEffects'
+        out_dir = f'GroupRandomEffects_{args.out_tag}' if args.out_tag else 'GroupRandomEffects'
+        self.process = out_dir
         self.dataset_path = args.dataset_path
         self.derivatives_path = f'{self.dataset_path}/derivatives'
         self.glm_path = f'{self.derivatives_path}/NilearnGLM'
@@ -24,11 +25,16 @@ class GroupRandomEffects:
         self.condition_two = args.condition_two
         self.contrast_name = f'{self.condition_one}-{self.condition_two}'
         self.task_label = args.task_label
-        
-        # Find all subjects that have the contrast file
-        self.contrast_files = sorted(glob(f'{self.glm_path}/sub-*/task-{self.task_label}/contrast-{self.contrast_name}_stat-tmap.nii.gz'))
+
+        # Find all subjects that have the contrast file, optionally restricted to sub_nums
+        all_contrast_files = sorted(glob(f'{self.glm_path}/sub-*/task-{self.task_label}/contrast-{self.contrast_name}_stat-tmap.nii.gz'))
+        if args.sub_nums:
+            subjs_filter = {str(i).zfill(2) for i in args.sub_nums}
+            all_contrast_files = [f for f in all_contrast_files
+                                   if Path(f).parent.parent.name.replace('sub-', '') in subjs_filter]
+        self.contrast_files = all_contrast_files
         self.subjs = [Path(f).parent.parent.name.replace('sub-', '') for f in self.contrast_files]
-        
+
         print(f'Found {len(self.contrast_files)} subjects with contrast {self.contrast_name} for task {self.task_label}: {self.subjs}')
         Path(f'{self.out_path}').mkdir(parents=True, exist_ok=True)
 
@@ -72,6 +78,13 @@ def main():
                          help='The second condition for the contrast')
     parser.add_argument('--task_label', '-t', type=str, default='communicate',#required=True,
                          help='Task label (communicate, tom, pointlight)')
+    parser.add_argument('sub_nums', nargs='*', type=int,
+                         help='Subject numbers to include (default: every subject with the contrast '
+                              'file on disk).')
+    parser.add_argument('--out_tag', type=str, default='',
+                         help='If set, write to derivatives/GroupRandomEffects_<out_tag>/ instead of '
+                              'derivatives/GroupRandomEffects/, so a run on a subject subset does not '
+                              'overwrite the full-sample group output.')
     args = parser.parse_args()
 
     processor = GroupRandomEffects(args)
