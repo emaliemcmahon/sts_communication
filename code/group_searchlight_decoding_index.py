@@ -64,12 +64,18 @@ class GroupSearchlightDecodingIndex:
         self.roi_mask = args.roi_mask
         out_dir = f'{self.process}_{args.out_tag}' if args.out_tag else self.process
         self.out_path = f'{self.derivatives_path}/{out_dir}'
-        self.out_stem = 'group_decoding_index' if self.roi_mask == 'none' else f'group_decoding_index_roi-{self.roi_mask}'
         self.sub_nums = args.sub_nums
         self.subjs = [f'sub-{str(i).zfill(2)}' for i in self.sub_nums]
         self.smoothing_fwhm = args.smoothing_fwhm
         self.n_perm = args.n_perm
         self.cluster_forming_threshold = args.cluster_forming_threshold
+        # Cluster-mass FWE is sensitive to the cluster-forming threshold, so
+        # it's encoded in every output filename (e.g. "cft-0.01") to keep
+        # runs at different thresholds from colliding/overwriting each other.
+        cft_tag = f'{self.cluster_forming_threshold:g}'
+        self.out_stem = f'group_decoding_index_cft-{cft_tag}'
+        if self.roi_mask != 'none':
+            self.out_stem += f'_roi-{self.roi_mask}'
         self.alpha = args.alpha
         self.surf_search_radius_mm = args.surf_search_radius_mm
         self.n_jobs = args.n_jobs if args.n_jobs is not None else os.cpu_count()
@@ -274,9 +280,10 @@ def parse_args():
                         'decoding index map before the group test.')
     p.add_argument('--n_perm', type=int, default=10000,
                    help='Sign-flip permutations for the group null distribution.')
-    p.add_argument('--cluster_forming_threshold', type=float, default=0.001,
+    p.add_argument('--cluster_forming_threshold', type=float, default=0.01,
                    help='Voxel-level p-value threshold used to define clusters for '
-                        'cluster-mass FWE correction.')
+                        'cluster-mass FWE correction. Encoded in output filenames '
+                        '(e.g. "cft-0.01") so runs at different thresholds coexist.')
     p.add_argument('--alpha', type=float, default=0.05,
                    help='Cluster-mass FWE-corrected significance level used only for '
                         'the surface plot threshold; all unthresholded stat maps are '
