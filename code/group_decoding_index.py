@@ -31,7 +31,8 @@ class GroupDecodingIndex:
         self.conf_level = args.conf_level
         self.derivatives_path = os.path.join(self.dataset_path, 'derivatives')
         self.individual_path = os.path.join(self.derivatives_path, 'DecodingIndex')
-        self.out_path = os.path.join(self.derivatives_path, self.process)
+        out_dir = f'{self.process}_{args.out_tag}' if args.out_tag else self.process
+        self.out_path = os.path.join(self.derivatives_path, out_dir)
         self.out_file = os.path.join(self.out_path, 'subject_decoding_index.csv')
         self.stats_file = os.path.join(self.out_path, 'stats.csv')
         self.corr_file = os.path.join(self.out_path, f'{args.corr_roi_x}_{args.corr_roi_y}_correlation.csv')
@@ -215,6 +216,10 @@ def main():
     parser.add_argument('--corr_roi_y', type=str, default='SI-STS',
                          help='ROI plotted on the y-axis of the across-subject '
                               'decoding-index correlation scatter.')
+    parser.add_argument('--out_tag', type=str, default='',
+                         help='If set, write to derivatives/GroupDecodingIndex_<out_tag>/ instead '
+                              'of derivatives/GroupDecodingIndex/, so a run on a subject subset '
+                              'does not overwrite the full-sample results.')
     args = parser.parse_args()
     GroupDecodingIndex(args).run()
 
