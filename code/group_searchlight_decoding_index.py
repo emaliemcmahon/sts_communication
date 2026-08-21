@@ -71,6 +71,7 @@ class GroupSearchlightDecodingIndex:
         self.n_perm = args.n_perm
         self.cluster_forming_threshold = args.cluster_forming_threshold
         self.alpha = args.alpha
+        self.surf_search_radius_mm = args.surf_search_radius_mm
         self.n_jobs = args.n_jobs if args.n_jobs is not None else os.cpu_count()
         self.fsaverage_mesh = 'fsaverage6'
         Path(self.out_path).mkdir(parents=True, exist_ok=True)
@@ -120,16 +121,43 @@ class GroupSearchlightDecodingIndex:
         return intersect_masks(parcel_imgs, threshold=0, connected=False)
 
     # ---------- Plotting ----------
-    def _plot_surfs(self, img: nib.Nifti1Image, title: str, outbase: Path,
-                    vmin: float, vmax: float) -> None:
+    def _plot_surfs(self, mean_img: nib.Nifti1Image, sig_mask_img: nib.Nifti1Image,
+                    title: str, outbase: Path, vmin: float, vmax: float) -> None:
+        """Project the (unmasked, continuous) group-mean map to the surface
+        as usual, but decide which vertices to color from a separate,
+        spherical-neighborhood projection of the binary significance mask
+        rather than from that same per-vertex line sample.
+
+        The default line/depth sampling (one ray per vertex, between the
+        white and pial surface) can entirely miss a small volumetric
+        cluster: for a 43-voxel cluster restricted to the STS ROI here,
+        only 5 of fsaverage6's ~41k vertices happened to lie on a ray that
+        passed through a significant voxel, so the significant patch was
+        invisible in the rendered plot. Sampling within a small ball
+        (`--surf_search_radius_mm`) around each vertex for the
+        significance mask only (not for the plotted value itself) fixes
+        this without changing which voxels counted as significant -- it
+        only affects which surface vertices are colored.
+        """
         surf = fetch_surf_fsaverage(self.fsaverage_mesh)
         for hemi in ['left', 'right']:
-            stat = vol_to_surf(img, surf[f'pial_{hemi}'], interpolation='linear',
+            stat = vol_to_surf(mean_img, surf[f'pial_{hemi}'], interpolation='linear',
                                inner_mesh=surf[f'white_{hemi}'])
+            # interpolation='nearest' + averaging + a >0 threshold gives
+            # "any of the ball's samples hit a significant voxel" (union
+            # coverage); 'nearest_most_frequent' (nilearn's suggested
+            # replacement for atlases) would instead require a *majority*
+            # of samples to be significant, which defeats the point for a
+            # cluster only a couple of voxels across.
+            sig_coverage = vol_to_surf(sig_mask_img, surf[f'pial_{hemi}'], kind='ball',
+                                       radius=self.surf_search_radius_mm,
+                                       interpolation='nearest', n_samples=20)
+            vertex_sig = np.nan_to_num(sig_coverage) > 0
+            stat = np.where(vertex_sig, stat, np.nan)
             for view in ['lateral', 'medial', 'ventral']:
                 # threshold=None: significance is already encoded by masking
-                # non-significant voxels to NaN before this is called, so no
-                # additional colormap threshold is applied here.
+                # non-significant vertices to NaN above, so no additional
+                # colormap threshold is applied here.
                 plot_surf_stat_map(surf[f'infl_{hemi}'], stat_map=stat, bg_map=surf[f'sulc_{hemi}'],
                                    hemi=hemi, view=view, bg_on_data=True, cmap='coolwarm',
                                    threshold=None, vmin=vmin, vmax=vmax,
@@ -214,7 +242,9 @@ class GroupSearchlightDecodingIndex:
             roi_suffix = '' if self.roi_mask == 'none' else f', ROI={self.roi_mask}'
             title = f'Decoding index (cluster-mass FWE p<{self.alpha}{roi_suffix})'
             print('Plotting surfaces ...')
-            self._plot_surfs(thresholded_img, title, outbase, vmin=-vmax, vmax=vmax)
+            mean_img = nib.Nifti1Image(mean_index, mask_img.affine)
+            sig_img = nib.Nifti1Image(sig.astype(np.int32), mask_img.affine)
+            self._plot_surfs(mean_img, sig_img, title, outbase, vmin=-vmax, vmax=vmax)
         else:
             print('No significant voxels; skipping surface plots.')
 
@@ -251,6 +281,14 @@ def parse_args():
                    help='Cluster-mass FWE-corrected significance level used only for '
                         'the surface plot threshold; all unthresholded stat maps are '
                         'saved regardless.')
+    p.add_argument('--surf_search_radius_mm', type=float, default=4.0,
+                   help='Radius (mm) of the spherical neighborhood sampled around each '
+                        'surface vertex to decide whether it is "covered" by a '
+                        'significant voxel for plotting. Rendering only -- does not '
+                        'affect which voxels count as significant -- but needed because '
+                        'the default single-ray-per-vertex surface projection can miss '
+                        'small volumetric clusters entirely (e.g. a 43-voxel STS '
+                        'cluster projected to only 5/40962 fsaverage6 vertices).')
     p.add_argument('--n_jobs', type=int, default=None,
                    help='Parallel workers for the permutation procedure (default: all cores).')
     p.add_argument('--out_tag', type=str, default='',
