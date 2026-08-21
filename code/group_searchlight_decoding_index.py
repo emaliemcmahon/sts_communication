@@ -19,6 +19,19 @@ For each hemisphere-agnostic whole-brain run:
      decoding index (each subject's map smoothed the same way as the test,
      then averaged) masked down to only the cluster-mass FWE-significant
      voxels.
+
+``--roi_mask sts`` restricts the search volume (and hence the FWE
+correction) to the union of the left/right anatomical STS parcels
+(Deen et al., 2015; `derivatives/parcels-<space_label>/{l,r}anatSTS.nii.gz`,
+same atlas used elsewhere in this project, e.g. group_parcel_probability.py).
+These are single group-level atlas files already in the same voxel grid as
+the subject decoding-index maps (both `MNI152NLin2009cAsym` by default), so
+no resampling is needed. Restricting the search volume this way is a
+standard small-volume-correction move: FWE correction is inherently
+volume-dependent, so testing only within an a priori region of interest
+gives voxels there a real chance to survive correction that whole-brain
+correction may wash out, at the cost of no longer testing (or being able to
+claim significance) anywhere outside that region.
 """
 
 import argparse
@@ -32,9 +45,12 @@ import numpy as np
 import pandas as pd
 from nilearn.datasets import fetch_surf_fsaverage
 from nilearn.glm.second_level import non_parametric_inference
-from nilearn.image import smooth_img
+from nilearn.image import resample_to_img, smooth_img
+from nilearn.masking import intersect_masks
 from nilearn.plotting import plot_surf_stat_map
 from nilearn.surface import vol_to_surf
+
+ROI_MASKS = {'none': None, 'sts': ['lanatSTS', 'ranatSTS']}
 
 
 class GroupSearchlightDecodingIndex:
@@ -43,9 +59,12 @@ class GroupSearchlightDecodingIndex:
         self.dataset_path = args.dataset_path
         self.derivatives_path = f'{self.dataset_path}/derivatives'
         self.individual_path = f'{self.derivatives_path}/SearchlightDecodingIndex'
+        self.parcel_path = f'{self.derivatives_path}/parcels-{args.space_label}'
         self.overwrite = args.overwrite
+        self.roi_mask = args.roi_mask
         out_dir = f'{self.process}_{args.out_tag}' if args.out_tag else self.process
         self.out_path = f'{self.derivatives_path}/{out_dir}'
+        self.out_stem = 'group_decoding_index' if self.roi_mask == 'none' else f'group_decoding_index_roi-{self.roi_mask}'
         self.sub_nums = args.sub_nums
         self.subjs = [f'sub-{str(i).zfill(2)}' for i in self.sub_nums]
         self.smoothing_fwhm = args.smoothing_fwhm
@@ -81,6 +100,25 @@ class GroupSearchlightDecodingIndex:
         finite = np.isfinite(data).all(axis=0)
         return nib.Nifti1Image(finite.astype(np.int32), imgs[0].affine)
 
+    def _roi_mask_img(self, ref_img: nib.Nifti1Image):
+        """Union of the atlas parcel(s) named in ROI_MASKS[self.roi_mask]
+        (e.g. left + right anatomical STS), resampled onto ``ref_img``'s
+        grid if needed (a no-op when, as by default, both are
+        MNI152NLin2009cAsym at 2mm)."""
+        names = ROI_MASKS[self.roi_mask]
+        if names is None:
+            return None
+        parcel_imgs = []
+        for name in names:
+            f = f'{self.parcel_path}/{name}.nii.gz'
+            if not os.path.exists(f):
+                raise FileNotFoundError(f'Missing ROI parcel: {f}')
+            img = nib.load(f)
+            if img.shape != ref_img.shape or not np.allclose(img.affine, ref_img.affine):
+                img = resample_to_img(img, ref_img, interpolation='nearest')
+            parcel_imgs.append(img)
+        return intersect_masks(parcel_imgs, threshold=0, connected=False)
+
     # ---------- Plotting ----------
     def _plot_surfs(self, img: nib.Nifti1Image, title: str, outbase: Path,
                     vmin: float, vmax: float) -> None:
@@ -102,7 +140,7 @@ class GroupSearchlightDecodingIndex:
     # ---------- Group test ----------
     def run(self) -> None:
         t_start = time.time()
-        outbase = Path(self.out_path) / 'group_decoding_index'
+        outbase = Path(self.out_path) / self.out_stem
         done_marker = f'{outbase}_stat-mass.nii.gz'
         if not self.overwrite and Path(done_marker).exists():
             print(f'Outputs already exist at {outbase}; skipping (use --overwrite).')
@@ -117,6 +155,12 @@ class GroupSearchlightDecodingIndex:
         mask_img = self._group_mask(imgs)
         n_vox = int(mask_img.get_fdata().sum())
         print(f'{len(imgs)} subjects, group mask has {n_vox} voxels')
+
+        if self.roi_mask != 'none':
+            roi_img = self._roi_mask_img(mask_img)
+            mask_img = intersect_masks([mask_img, roi_img], threshold=1, connected=False)
+            n_vox = int(mask_img.get_fdata().sum())
+            print(f'Restricted to ROI mask "{self.roi_mask}": group mask now has {n_vox} voxels')
 
         # Values outside the mask are irrelevant (non_parametric_inference
         # restricts computation to `mask_img`), so nan_to_num here is only
@@ -167,7 +211,8 @@ class GroupSearchlightDecodingIndex:
 
         if n_sig > 0:
             vmax = max(float(np.nanmax(np.abs(thresholded_index))), 0.01)
-            title = f'Decoding index (cluster-mass FWE p<{self.alpha})'
+            roi_suffix = '' if self.roi_mask == 'none' else f', ROI={self.roi_mask}'
+            title = f'Decoding index (cluster-mass FWE p<{self.alpha}{roi_suffix})'
             print('Plotting surfaces ...')
             self._plot_surfs(thresholded_img, title, outbase, vmin=-vmax, vmax=vmax)
         else:
@@ -186,6 +231,13 @@ def parse_args():
                    default=[1, 2, 3, 4, 5, 7, 8, 9, 11, 12, 13, 14, 15, 16, 18, 19, 20, 21, 22, 23])
     p.add_argument('--dataset_path', '-d', type=str,
                    default='/orcd/data/ngk/001/users/emaliem/sts_communication')
+    p.add_argument('--space_label', '-sp', type=str, default='MNI152NLin2009cAsym',
+                   help='Space of the first-level decoding index maps and of the ROI '
+                        'parcel files under derivatives/parcels-<space_label>/.')
+    p.add_argument('--roi_mask', type=str, default='none', choices=list(ROI_MASKS.keys()),
+                   help='Restrict the group search volume (and hence the FWE correction) '
+                        'to this ROI instead of the whole brain. "sts" uses the union of '
+                        'the left/right anatomical STS parcels (small-volume correction).')
     p.add_argument('--overwrite', action=argparse.BooleanOptionalAction, default=False)
     p.add_argument('--smoothing_fwhm', type=float, default=6.0,
                    help='FWHM (mm) of Gaussian smoothing applied to each subject\'s '
