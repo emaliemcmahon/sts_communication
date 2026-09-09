@@ -19,7 +19,7 @@ contrasts = [('face-first', 'face-noncom'),
              ('face-third', 'face-noncom'),
              ('com-ind', 'ind'),
              ('com-joint', 'joint'), 
-             ('joint', 'ind'),
+            #  ('joint', 'ind'),
             #  ('com-ind', 'interact'),
             #  ('com-joint', 'interact'),
             #  ('face-first', 'interact'),
@@ -241,7 +241,7 @@ class GroupRunwiseResults:
         sns.set_context('poster', font_scale=2)
         for roi in rois:
             fig, ax = plt.subplots(1, 1,
-                                   figsize=(56,10))
+                                   figsize=(56,15))
             sns.barplot(x='trial_type', y='response',
                         hue='trial_type', legend=False,
                         ax=ax, data=df.loc[roi].reset_index(drop=True), 
